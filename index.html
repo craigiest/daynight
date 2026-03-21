@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 18:14 UTC</div>
+  <div id="version-stamp">v.2026-03-21 18:28 UTC</div>
 
   <svg id="map"></svg>
 
@@ -172,12 +172,14 @@ var scales = {
   azed:  Math.min(W, H) * 0.47 / Math.PI
 };
 
-// Mercator translate + scale (computed immediately so it's available before data loads)
-var mercTranslate = (function() {
+// Mercator state: rotation (center longitude λ₀ — center of view = −λ₀), scale, ty
+// Uses .rotate([λ₀, 0]) so the cylinder axis shifts when panning — true reprojection.
+var mercState = (function() {
   var p = d3.geoMercator();
   p.fitExtent([[20,60],[W-20,H-80]], {type:'Feature',geometry:{type:'MultiPoint',
     coordinates:[[-179.9,-60],[179.9,75]]}});
-  return { scale: p.scale(), xy: p.translate().slice() };
+  var t = p.translate();
+  return { rotation: 0, scale: p.scale(), ty: t[1] };
 })();
 
 // Time state — default to Mar 21 2026 16:00 UTC
@@ -231,9 +233,12 @@ var graticule = d3.geoGraticule()();
 function makeProj(type) {
   switch (type) {
     case 'mercator':
+      // rotate([λ₀,0]) makes the Mercator cylinder axis shift — actual reprojection,
+      // not just a pixel pan. Center of view is at longitude −λ₀.
       return d3.geoMercator()
-        .scale(mercTranslate.scale)
-        .translate(mercTranslate.xy);
+        .rotate([mercState.rotation, 0])
+        .scale(mercState.scale)
+        .translate([W/2, mercState.ty]);
     case 'globe':
       return d3.geoOrthographic()
         .scale(scales.globe)
@@ -263,8 +268,8 @@ function redraw() {
   if (centerOnSun) {
     var _sun = solarPosition(currentTime());
     if (currentProj === 'mercator') {
-      // Pan so sun longitude is at horizontal center
-      mercTranslate.xy[0] = W/2 - mercTranslate.scale * (_sun.longitude * RAD);
+      // Center = −λ₀, so to show sun.longitude at center: λ₀ = −sun.longitude
+      mercState.rotation = -_sun.longitude;
     } else {
       rotation[0] = -_sun.longitude;
     }
@@ -404,14 +409,16 @@ svg.call(d3.drag()
     drag0 = {
       x: event.x, y: event.y,
       rot: rotation.slice(),
-      tx: mercTranslate.xy[0], ty: mercTranslate.xy[1]
+      mRot: mercState.rotation, mTy: mercState.ty
     };
   })
   .on('drag', function(event) {
     if (!drag0 || centerOnSun) return;
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
-      mercTranslate.xy = [drag0.tx + dx, drag0.ty + dy];
+      // screen_x = scale*(λ+λ₀)*RAD + W/2 → Δλ₀ = dx*DEG/scale
+      mercState.rotation = drag0.mRot + dx * DEG / mercState.scale;
+      mercState.ty = drag0.mTy + dy;
     } else if (currentProj === 'globe') {
       // Sensitivity: degrees per pixel ≈ 180 / (π × scale)
       var s = 180 / (Math.PI * scales.globe);
@@ -434,15 +441,14 @@ document.getElementById('map').addEventListener('wheel', function(event) {
 
   if (currentProj === 'mercator') {
     var cx = event.offsetX, cy = event.offsetY;
-    // For Mercator: screen_x = scale * λ_rad + tx, screen_y = scale * y_merc + ty
-    // To keep the geo point under the cursor fixed, scale tx and ty toward the cursor:
-    //   tx_new = cx + (tx_old - cx) * (scale_new / scale_old)
-    //   ty_new = cy + (ty_old - cy) * (scale_new / scale_old)
-    var oldScale = mercTranslate.scale;
-    mercTranslate.scale = Math.max(50, Math.min(oldScale * factor, W * 50));
-    var ratio = mercTranslate.scale / oldScale;
-    mercTranslate.xy[0] = cx + (mercTranslate.xy[0] - cx) * ratio;
-    mercTranslate.xy[1] = cy + (mercTranslate.xy[1] - cy) * ratio;
+    var oldScale = mercState.scale;
+    mercState.scale = Math.max(50, Math.min(oldScale * factor, W * 50));
+    // screen_x = scale*(λ+λ₀)*RAD + W/2 → to pin longitude under cursor:
+    // λ₀_new = λ₀_old + (cx−W/2)×DEG×(1/k_new − 1/k_old)
+    mercState.rotation += (cx - W/2) * DEG * (1/mercState.scale - 1/oldScale);
+    // screen_y = scale*y_merc + ty → to pin latitude under cursor:
+    // ty_new = cy + (ty_old − cy) × (k_new/k_old)
+    mercState.ty = cy + (mercState.ty - cy) * (mercState.scale / oldScale);
   } else if (currentProj === 'globe') {
     scales.globe = Math.max(80, Math.min(scales.globe * factor, Math.min(W,H) * 5));
   } else {
