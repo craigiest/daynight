@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 22:51 UTC</div>
+  <div id="version-stamp">v.2026-03-21 23:45 UTC</div>
 
   <svg id="map"></svg>
 
@@ -295,7 +295,15 @@ PARALLELS.forEach(function(p) {
 
 var layerNight     = worldContent.append('path').attr('class','night');
 
-var sunG = worldContent.append('g').style('pointer-events','none');
+// Wrapping copies — visible only in Mercator mode, offset ±worldWidth
+var wcLeft  = svg.append('use').attr('href','#world-content')
+                .style('pointer-events','none').style('display','none');
+var wcRight = svg.append('use').attr('href','#world-content')
+                .style('pointer-events','none').style('display','none');
+
+// Sun marker appended AFTER wcLeft/wcRight so it always renders above wrapped copies
+// (wrapped copies can otherwise cover the sun with their night shadow near ±180°)
+var sunG = svg.append('g').style('pointer-events','none');
 sunG.append('circle').attr('class','sun-halo').attr('r', 22)
     .attr('fill','#ffba00').attr('filter','url(#sun-glow)').attr('opacity', 0.55);
 // Asterisk: 3 lines at 0°/60°/120°, giving 6 arms
@@ -305,12 +313,6 @@ sunG.append('circle').attr('class','sun-halo').attr('r', 22)
       .attr('x1', -9*c).attr('y1', -9*s).attr('x2', 9*c).attr('y2', 9*s)
       .attr('stroke','#ffba00').attr('stroke-width', 1.75).attr('stroke-linecap','round');
 });
-
-// Wrapping copies — visible only in Mercator mode, offset ±worldWidth
-var wcLeft  = svg.append('use').attr('href','#world-content')
-                .style('pointer-events','none').style('display','none');
-var wcRight = svg.append('use').attr('href','#world-content')
-                .style('pointer-events','none').style('display','none');
 
 var graticule = d3.geoGraticule()();
 
@@ -432,11 +434,21 @@ function isSunFront(lon, lat) {
 
 // Get screen (x,y) for the sun — returns coordinates even when behind the globe
 function sunScreenXY(lon, lat) {
-  if (currentProj !== 'globe') return proj([lon, lat]);
-  // Use an unclipped orthographic so back-of-globe coords are still returned
-  return d3.geoOrthographic()
-    .scale(scales.globe).translate([W/2, H/2]).rotate(rotation)
-    .clipAngle(180)([lon, lat]);
+  if (currentProj === 'globe') {
+    // Use an unclipped orthographic so back-of-globe coords are still returned
+    return d3.geoOrthographic()
+      .scale(scales.globe).translate([W/2, H/2]).rotate(rotation)
+      .clipAngle(180)([lon, lat]);
+  }
+  var xy = proj([lon, lat]);
+  if (xy && currentProj === 'mercator') {
+    // Normalize to the nearest tile to screen centre so the sun doesn't jump
+    // by a full world-width when its longitude crosses the ±180° antimeridian.
+    var ww = 2 * Math.PI * mercState.scale;
+    var n = Math.round((W / 2 - xy[0]) / ww);
+    return [xy[0] + n * ww, xy[1]];
+  }
+  return xy;
 }
 
 // ── Time label (editable) ─────────────────────────────────────────────────────
