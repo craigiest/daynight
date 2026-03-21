@@ -39,28 +39,23 @@
       color: rgba(255,255,255,0.35); pointer-events: none;
     }
 
-    /* ── Follow toggle (top-right) ── */
+    /* ── Move Sun / Move Map segmented control (top-right) ── */
     #follow-bar {
       position: absolute; top: 14px; right: 14px; z-index: 10;
-      display: flex; align-items: center; gap: 8px;
-      background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 8px;
+      display: flex; gap: 0;
+      background: rgba(0,0,0,0.55); padding: 4px; border-radius: 8px;
       backdrop-filter: blur(4px);
+    }
+    .seg {
+      padding: 5px 14px;
+      border: none; background: transparent;
+      color: rgba(255,255,255,0.42);
       font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: rgba(255,255,255,0.65);
+      cursor: pointer; border-radius: 5px; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
     }
-    .tog { position: relative; display: inline-block; width: 36px; height: 20px; }
-    .tog input { opacity: 0; width: 0; height: 0; }
-    .tog-track {
-      position: absolute; inset: 0; background: rgba(255,255,255,0.2);
-      border-radius: 10px; cursor: pointer; transition: background 0.2s;
-    }
-    .tog input:checked + .tog-track { background: #ffba00; }
-    .tog-track::after {
-      content: ''; position: absolute; left: 3px; top: 3px;
-      width: 14px; height: 14px; background: white; border-radius: 50%;
-      transition: transform 0.2s;
-    }
-    .tog input:checked + .tog-track::after { transform: translateX(16px); }
+    .seg:hover:not(.active) { color: rgba(255,255,255,0.65); }
+    .seg.active { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.9); }
 
     /* ── Bottom bar ── */
     #bottom-bar {
@@ -122,22 +117,18 @@
 
 <div id="wrapper">
   <div id="proj-bar">
-    <button class="active" data-proj="mercator">Mercator</button>
-    <button data-proj="globe">Globe</button>
+    <button data-proj="mercator">Mercator</button>
+    <button class="active" data-proj="globe">Globe</button>
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 17:57 UTC</div>
+  <div id="version-stamp">v.2026-03-21 18:14 UTC</div>
 
   <svg id="map"></svg>
 
   <div id="follow-bar">
-    <span>Move Sun</span>
-    <label class="tog">
-      <input type="checkbox" id="follow-toggle">
-      <div class="tog-track"></div>
-    </label>
-    <span>Move Map</span>
+    <button class="seg active" data-mode="sun">Move Sun</button>
+    <button class="seg"        data-mode="map">Move Map</button>
   </div>
 
   <div id="bottom-bar">
@@ -170,8 +161,8 @@ var RAD = Math.PI / 180, DEG = 180 / Math.PI;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 var W = window.innerWidth, H = window.innerHeight;
-var currentProj = 'mercator';
-var rotation = [0, 0, 0];  // [λ, φ, γ] — shared drag state for globe/polar
+var currentProj = 'globe';
+var rotation = [100, 0, 0];  // default: 100°W, equator [λ, φ, γ]
 var centerOnSun = false;
 var playing = false, playRaf = null, playLastTs = null;
 
@@ -189,9 +180,9 @@ var mercTranslate = (function() {
   return { scale: p.scale(), xy: p.translate().slice() };
 })();
 
-// Time state — day-of-year + minute-of-day for the selected year
+// Time state — default to Mar 21 2026 16:00 UTC
 var _now = new Date();
-var selectedYear = _now.getUTCFullYear();
+var selectedYear = 2026;
 
 function isLeapYear(y) { return (y%4===0 && y%100!==0) || y%400===0; }
 function daysInYear(y)  { return isLeapYear(y) ? 366 : 365; }
@@ -397,12 +388,11 @@ d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(f
       redraw();
     });
 
-  // Initialise sliders to current UTC time
+  // Initialise sliders: Mar 21 2026 = day 80, 16:00 UTC = 960 min
   var ds = document.getElementById('date-slider');
   ds.max   = daysInYear(selectedYear);
-  ds.value = utcDayOfYear(_now.getTime());
-  document.getElementById('time-slider').value =
-    _now.getUTCHours() * 60 + _now.getUTCMinutes();
+  ds.value = 80;   // Mar 21
+  document.getElementById('time-slider').value = 960; // 16:00 UTC
 
   redraw();
 });
@@ -444,18 +434,15 @@ document.getElementById('map').addEventListener('wheel', function(event) {
 
   if (currentProj === 'mercator') {
     var cx = event.offsetX, cy = event.offsetY;
-    // Get geo coords under cursor before scale change
-    var geo = proj && proj.invert ? proj.invert([cx, cy]) : null;
-    mercTranslate.scale = Math.max(50, Math.min(mercTranslate.scale * factor, W * 50));
-    if (geo) {
-      // Recompute translate so the same geo point stays under the cursor
-      var tmp = d3.geoMercator().scale(mercTranslate.scale).translate(mercTranslate.xy);
-      var nxy = tmp(geo);
-      if (nxy) {
-        mercTranslate.xy[0] += cx - nxy[0];
-        mercTranslate.xy[1] += cy - nxy[1];
-      }
-    }
+    // For Mercator: screen_x = scale * λ_rad + tx, screen_y = scale * y_merc + ty
+    // To keep the geo point under the cursor fixed, scale tx and ty toward the cursor:
+    //   tx_new = cx + (tx_old - cx) * (scale_new / scale_old)
+    //   ty_new = cy + (ty_old - cy) * (scale_new / scale_old)
+    var oldScale = mercTranslate.scale;
+    mercTranslate.scale = Math.max(50, Math.min(oldScale * factor, W * 50));
+    var ratio = mercTranslate.scale / oldScale;
+    mercTranslate.xy[0] = cx + (mercTranslate.xy[0] - cx) * ratio;
+    mercTranslate.xy[1] = cy + (mercTranslate.xy[1] - cy) * ratio;
   } else if (currentProj === 'globe') {
     scales.globe = Math.max(80, Math.min(scales.globe * factor, Math.min(W,H) * 5));
   } else {
@@ -507,10 +494,15 @@ document.getElementById('play-btn').addEventListener('click', function() {
   }
 });
 
-// ── Follow / Move Map toggle ──────────────────────────────────────────────────
-document.getElementById('follow-toggle').addEventListener('change', function() {
-  centerOnSun = this.checked;
-  redraw();
+// ── Move Sun / Move Map segmented control ────────────────────────────────────
+document.querySelectorAll('#follow-bar .seg').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    centerOnSun = this.dataset.mode === 'map';
+    document.querySelectorAll('#follow-bar .seg').forEach(function(b) {
+      b.classList.toggle('active', b === btn);
+    });
+    redraw();
+  });
 });
 
 // ── Solar position (NOAA algorithm) ──────────────────────────────────────────
