@@ -73,12 +73,13 @@
   <script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
   <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
   <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js"></script>
 </head>
 <body>
 
 <div id="wrapper">
   <div id="proj-bar">
-    <button class="active" data-proj="mercator">Flat Map</button>
+    <button class="active" data-proj="mercator">Mercator</button>
     <button data-proj="globe">Globe</button>
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
@@ -304,15 +305,16 @@ function setProjection(type) {
     setTimeout(function () { chart.goHome(); }, 650);
 
   } else if (type === "north") {
-    // Azimuthal equidistant centered on the North Pole (rotationY = -90)
-    chart.set("projection", am5map.geoAzimuthalEquidistant());
+    // d3.geoAzimuthalEquidistant is not exposed by am5map, so load via d3-geo.
+    // rotationY = -90 → amCharts calls proj.rotate([0, 90, 0]) → North Pole at center.
+    chart.set("projection", d3.geoAzimuthalEquidistant());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
     chart.animate({ key: "rotationX", to: 0, duration: 800 });
     chart.animate({ key: "rotationY", to: -90, duration: 800 });
 
   } else if (type === "south") {
-    // Azimuthal equidistant centered on the South Pole (rotationY = +90)
-    chart.set("projection", am5map.geoAzimuthalEquidistant());
+    // rotationY = +90 → amCharts calls proj.rotate([0, -90, 0]) → South Pole at center.
+    chart.set("projection", d3.geoAzimuthalEquidistant());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
     chart.animate({ key: "rotationX", to: 0, duration: 800 });
     chart.animate({ key: "rotationY", to: 90, duration: 800 });
