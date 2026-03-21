@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-22 00:09 UTC</div>
+  <div id="version-stamp">v.2026-03-22 00:22 UTC</div>
 
   <svg id="map"></svg>
 
@@ -777,8 +777,19 @@ document.getElementById('now-btn').addEventListener('click', function() {
 document.querySelectorAll('#follow-bar .seg').forEach(function(btn) {
   btn.addEventListener('click', function() {
     centerOnSun = this.dataset.mode === 'map';
-    // Don't reset sunOffsetLon — keep the sun at its current offset so the view
-    // doesn't jump back to centre when switching from Move Sun to Move Map.
+    if (centerOnSun) {
+      // Preserve the sun's current screen position instead of snapping to centre.
+      // In Move Map mode the sun appears at:
+      //   Mercator: x = W/2 + scale * sunOffsetLon * RAD
+      //   Globe:    rotation[0] = -sun.lon + sunOffsetLon
+      // Solve for sunOffsetLon that keeps the current visual position.
+      var _sun = solarPosition(currentTime());
+      if (currentProj === 'mercator') {
+        sunOffsetLon = _sun.longitude + (mercState.tx - W/2) / (mercState.scale * RAD);
+      } else {
+        sunOffsetLon = rotation[0] + _sun.longitude;
+      }
+    }
     document.querySelectorAll('#follow-bar .seg').forEach(function(b) {
       b.classList.toggle('active', b === btn);
     });
