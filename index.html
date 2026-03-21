@@ -73,7 +73,6 @@
   <script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
   <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
   <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/d3-geo@3/dist/d3-geo.min.js"></script>
 </head>
 <body>
 
@@ -305,16 +304,16 @@ function setProjection(type) {
     setTimeout(function () { chart.goHome(); }, 650);
 
   } else if (type === "north") {
-    // d3.geoAzimuthalEquidistant is not exposed by am5map, so load via d3-geo.
-    // rotationY = -90 → amCharts calls proj.rotate([0, 90, 0]) → North Pole at center.
-    chart.set("projection", d3.geoAzimuthalEquidistant());
+    // geoOrthographic is the only amCharts-native azimuthal projection.
+    // rotationY = -90 tilts the globe so the North Pole sits at centre.
+    chart.set("projection", am5map.geoOrthographic());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
     chart.animate({ key: "rotationX", to: 0, duration: 800 });
     chart.animate({ key: "rotationY", to: -90, duration: 800 });
 
   } else if (type === "south") {
-    // rotationY = +90 → amCharts calls proj.rotate([0, -90, 0]) → South Pole at center.
-    chart.set("projection", d3.geoAzimuthalEquidistant());
+    // rotationY = +90 tilts the globe so the South Pole sits at centre.
+    chart.set("projection", am5map.geoOrthographic());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
     chart.animate({ key: "rotationX", to: 0, duration: 800 });
     chart.animate({ key: "rotationY", to: 90, duration: 800 });
@@ -423,5 +422,6 @@ chart.appear(1000, 100);
 updateDayNight(baseTime);
 </script>
 
+<!-- v.2026-03-21 17:35 UTC -->
 </body>
 </html>
