@@ -131,7 +131,7 @@
     <button data-proj="north">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 21:45 UTC</div>
+  <div id="version-stamp">v.2026-03-21 21:39 UTC</div>
 
   <svg id="map"></svg>
 
@@ -185,7 +185,7 @@ var playing = false, playRaf = null, playLastTs = null;
 
 // Per-projection zoom scales (mutable — changed by scroll wheel)
 var scales = {
-  globe: Math.min(W, H) * 0.47,
+  globe: Math.min(W, H) * 0.47 / Math.PI,
   azed:  Math.min(W, H) * 0.47 / Math.PI
 };
 
@@ -541,10 +541,10 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
         }
       } else if (currentProj === 'north') {
         rotation[1] = -90;
-        scales.globe = scales.azed * Math.PI;
+        scales.globe = scales.azed;
       } else if (currentProj === 'south') {
         rotation[1] = 90;
-        scales.globe = scales.azed * Math.PI;
+        scales.globe = scales.azed;
       }
     }
 
@@ -554,7 +554,7 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
         if (center) rotation[0] = -center[0];
         scales.azed = mercState.scale;
       } else if (currentProj === 'globe') {
-        scales.azed = scales.globe / Math.PI;
+        scales.azed = scales.globe;
       }
     }
 
