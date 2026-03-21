@@ -111,6 +111,36 @@
       font-size: 12px; font-family: -apple-system, sans-serif;
     }
 
+    /* ── Mobile layout ── */
+    @media (max-width: 640px) {
+      #version-stamp { display: none; }
+
+      #proj-bar {
+        left: 8px; right: 8px; transform: none;
+        flex-wrap: wrap; justify-content: center;
+      }
+      #proj-bar button {
+        font-size: 0; padding: 10px 14px; min-height: 38px;
+      }
+      #proj-bar button::before {
+        font-size: 13px; content: attr(data-short);
+      }
+
+      #follow-bar {
+        top: 88px; right: 8px;
+      }
+      .seg { padding: 8px 14px; min-height: 38px; }
+
+      #bottom-bar {
+        left: 8px; right: 8px; transform: none;
+        flex-wrap: wrap; justify-content: center; gap: 8px 12px;
+      }
+      #date-slider { width: 100px; }
+      #time-slider { width: 100px; }
+      #time-label  { min-width: 130px; font-size: 11px; }
+      #play-btn, #now-btn { padding: 8px 14px; min-height: 38px; font-size: 14px; }
+    }
+
     /* ── SVG layer styles ── */
     .sphere   { fill: #2a3a4d; }
     .grat     { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 0.5; }
@@ -126,10 +156,10 @@
 
 <div id="wrapper">
   <div id="proj-bar">
-    <button data-proj="mercator">Mercator</button>
-    <button class="active" data-proj="globe">Orthographic</button>
-    <button data-proj="north">Azimuthal Equidistant (North Pole)</button>
-    <button data-proj="south">Azimuthal Equidistant (South Pole)</button>
+    <button data-proj="mercator" data-short="Mercator">Mercator</button>
+    <button class="active" data-proj="globe" data-short="Globe">Orthographic</button>
+    <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
+    <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
   <div id="version-stamp">v.2026-03-21 21:39 UTC</div>
 
