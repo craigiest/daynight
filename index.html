@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 20:53 UTC</div>
+  <div id="version-stamp">v.2026-03-21 20:57 UTC</div>
 
   <svg id="map"></svg>
 
@@ -225,7 +225,13 @@ var layerTwi2      = worldContent.append('path').attr('class','twi2');
 var sunG = worldContent.append('g').style('pointer-events','none');
 sunG.append('circle').attr('class','sun-halo').attr('r', 22)
     .attr('fill','#ffba00').attr('filter','url(#sun-glow)').attr('opacity', 0.55);
-sunG.append('circle').attr('class','sun-core').attr('r', 7).attr('fill','#ffba00');
+// Asterisk: 3 lines at 0°/60°/120°, giving 6 arms
+[0, 60, 120].forEach(function(deg) {
+  var a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  sunG.append('line').attr('class','sun-mark')
+      .attr('x1', -9*c).attr('y1', -9*s).attr('x2', 9*c).attr('y2', 9*s)
+      .attr('stroke','#ffba00').attr('stroke-width', 1.75).attr('stroke-linecap','round');
+});
 
 // Wrapping copies — visible only in Mercator mode, offset ±worldWidth
 var wcLeft  = svg.append('use').attr('href','#world-content')
@@ -334,7 +340,7 @@ function drawNight() {
         .style('display', null);
     var col = front ? '#ffba00' : '#c8a882';
     sunG.select('.sun-halo').attr('fill', col).attr('opacity', front ? 0.55 : 0.10);
-    sunG.select('.sun-core').attr('fill', col).attr('opacity', front ? 1    : 0.10);
+    sunG.selectAll('.sun-mark').attr('stroke', col).attr('opacity', front ? 1 : 0.10);
   } else {
     sunG.style('display', 'none');
   }
