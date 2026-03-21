@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 20:00 UTC</div>
+  <div id="version-stamp">v.2026-03-21 20:15 UTC</div>
 
   <svg id="map"></svg>
 
@@ -495,13 +495,32 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
         var center = proj.invert([W/2, H/2]);
         if (center) rotation = [-center[0], -center[1], 0];
       } else if (currentProj === 'north') {
-        // Look straight down at north pole, same longitude orientation
         rotation[1] = -90;
         scales.globe = scales.azed; // equal scale at the pole
       } else if (currentProj === 'south') {
         rotation[1] = 90;
         scales.globe = scales.azed;
       }
+    }
+
+    if (toProj === 'mercator') {
+      // lon/lat at the centre of the current view
+      var lon, lat;
+      if (currentProj === 'globe') {
+        lon = -rotation[0];
+        lat = -rotation[1];
+        // Mercator local scale at lat φ = scale/cos(φ); match orthographic scale
+        mercState.scale = scales.globe * Math.cos(lat * RAD);
+      } else {
+        // North/south pole: poles can't be centred in mercator — use equator.
+        // Longitude orientation is same as globe: -rotation[0].
+        lon = -rotation[0];
+        lat = 0;
+        mercState.scale = scales.azed;
+      }
+      mercState.tx = W/2 - mercState.scale * lon * RAD;
+      // Place lat at vertical centre
+      mercState.ty = H/2 + mercState.scale * Math.log(Math.tan(Math.PI/4 + lat * RAD / 2));
     }
 
     currentProj = toProj;
