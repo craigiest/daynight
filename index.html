@@ -7,9 +7,9 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; background: #000; }
-    #wrapper { position: relative; width: 100%; height: 100vh; overflow: hidden; }
+    #wrapper { position: relative; width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
 
-    #map { display: block; width: 100%; height: 100%; cursor: grab; overflow: visible; }
+    #map { display: block; width: 100%; height: 100%; cursor: grab; overflow: visible; touch-action: none; }
     #map:active { cursor: grabbing; }
 
     /* ── Projection bar ── */
@@ -60,12 +60,12 @@
     /* ── Bottom bar ── */
     #bottom-bar {
       position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-      z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      z-index: 10; display: flex; align-items: center; gap: 10px;
       background: rgba(0,0,0,0.55); padding: 8px 16px; border-radius: 8px;
       backdrop-filter: blur(4px);
     }
-    #bottom-row1 { display: flex; align-items: center; gap: 10px; }
-    #bottom-row2 { display: flex; align-items: flex-start; gap: 10px; }
+    /* Row wrappers are invisible on desktop — children flow into the parent flex */
+    #bottom-row1, #bottom-row2 { display: contents; }
     #play-btn, #now-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.3);
       border-radius: 4px; color: rgba(255,255,255,0.8);
@@ -135,8 +135,10 @@
 
       #bottom-bar {
         left: 8px; right: 8px; transform: none;
+        flex-direction: column; align-items: center; gap: 6px;
       }
-      #bottom-row2 { gap: 6px; }
+      #bottom-row1 { display: flex; align-items: center; gap: 8px; }
+      #bottom-row2 { display: flex; align-items: flex-start; gap: 6px; }
       #date-slider { width: 38vw; }
       #time-slider { width: 38vw; }
       #time-label  { min-width: 120px; font-size: 11px; }
@@ -503,8 +505,10 @@ d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(f
 
 // ── Drag (pan / rotate) ───────────────────────────────────────────────────────
 var drag0 = null;
+var isPinching = false;
 svg.call(d3.drag()
   .on('start', function(event) {
+    if (isPinching) return;
     drag0 = {
       x: event.x, y: event.y,
       rot: rotation.slice(),
@@ -512,7 +516,7 @@ svg.call(d3.drag()
     };
   })
   .on('drag', function(event) {
-    if (!drag0) return;
+    if (!drag0 || isPinching) return;
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
       if (centerOnSun) return;
@@ -556,12 +560,16 @@ document.getElementById('map').addEventListener('wheel', function(event) {
 }, { passive: false });
 
 // ── Pinch to zoom (mobile) ────────────────────────────────────────────────────
+// Note: pointerdown (used by d3.drag) fires before touchstart, so we can't
+// preventDefault in touchstart to stop d3. Instead we use isPinching to gate
+// the drag handlers, and touch-action:none on the SVG prevents browser zoom.
 var pinch0 = null;
 var mapEl = document.getElementById('map');
 
 mapEl.addEventListener('touchstart', function(event) {
-  if (event.touches.length === 2) {
-    event.preventDefault();
+  if (event.touches.length >= 2) {
+    isPinching = true;
+    drag0 = null;  // cancel any active drag
     var t0 = event.touches[0], t1 = event.touches[1];
     var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
     pinch0 = {
@@ -572,10 +580,10 @@ mapEl.addEventListener('touchstart', function(event) {
       midY: (t0.clientY + t1.clientY) / 2
     };
   }
-}, { passive: false });
+}, { passive: true });
 
 mapEl.addEventListener('touchmove', function(event) {
-  if (event.touches.length === 2 && pinch0) {
+  if (event.touches.length >= 2 && pinch0) {
     event.preventDefault();
     var t0 = event.touches[0], t1 = event.touches[1];
     var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
@@ -598,7 +606,10 @@ mapEl.addEventListener('touchmove', function(event) {
 }, { passive: false });
 
 mapEl.addEventListener('touchend', function(event) {
-  if (event.touches.length < 2) pinch0 = null;
+  if (event.touches.length < 2) {
+    isPinching = false;
+    pinch0 = null;
+  }
 });
 
 // ── Projection buttons ────────────────────────────────────────────────────────
@@ -636,18 +647,18 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
     }
 
     if (toProj === 'mercator') {
-      var lon, lat;
+      var lon = -rotation[0];
+      var lat, fromScale;
       if (currentProj === 'globe') {
-        lon = -rotation[0];
-        // Clamp lat away from ±90° where cos→0 and scale would collapse
+        // Use globe scale directly so the equator matches the globe's equatorial scale
+        fromScale = scales.globe;
         lat = Math.max(-66.5, Math.min(66.5, -rotation[1]));
-        mercState.scale = scales.globe * Math.cos(lat * RAD);
       } else {
         // North/south pole: poles can't be centred in mercator — use equator.
-        lon = -rotation[0];
+        fromScale = scales.azed;
         lat = 0;
-        mercState.scale = scales.azed;
       }
+      mercState.scale = fromScale;
       mercState.tx = W/2 - mercState.scale * lon * RAD;
       mercState.ty = H/2 + mercState.scale * Math.log(Math.tan(Math.PI/4 + lat * RAD / 2));
     }
