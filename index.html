@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 20:48 UTC</div>
+  <div id="version-stamp">v.2026-03-21 20:53 UTC</div>
 
   <svg id="map"></svg>
 
@@ -442,18 +442,19 @@ svg.call(d3.drag()
     };
   })
   .on('drag', function(event) {
-    if (!drag0 || centerOnSun) return;
+    if (!drag0) return;
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
+      if (centerOnSun) return;
       mercState.tx = drag0.mTx + dx;
       mercState.ty = drag0.mTy + dy;
     } else if (currentProj === 'globe') {
-      // Sensitivity: degrees per pixel ≈ 180 / (π × scale)
       var s = 180 / (Math.PI * scales.globe);
-      rotation[0] = drag0.rot[0] + dx * s;
+      if (!centerOnSun) rotation[0] = drag0.rot[0] + dx * s;
       rotation[1] = Math.max(-90, Math.min(90, drag0.rot[1] - dy * s));
     } else {
       // Polar az-ed: spin only (λ). Sens: 360 / (π² × scale)
+      if (centerOnSun) return;
       var s = 360 / (Math.PI * Math.PI * scales.azed);
       rotation[0] = drag0.rot[0] + dx * s;
     }
