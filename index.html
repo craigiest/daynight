@@ -9,7 +9,7 @@
     html, body { width: 100%; height: 100%; background: #2b2e3b; }
     #wrapper { position: relative; width: 100%; height: 100vh; overflow: hidden; }
 
-    #map { display: block; width: 100%; height: 100%; cursor: grab; }
+    #map { display: block; width: 100%; height: 100%; cursor: grab; overflow: visible; }
     #map:active { cursor: grabbing; }
 
     /* ── Projection bar ── */
@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 19:15 UTC</div>
+  <div id="version-stamp">v.2026-03-21 19:45 UTC</div>
 
   <svg id="map"></svg>
 
@@ -211,20 +211,25 @@ defs.append('filter')
   .attr('width', '500%').attr('height', '500%')
   .append('feGaussianBlur').attr('stdDeviation', '8');
 
-// Layer order: sphere → graticule → countries → night shadow → sun
-var layerSphere    = svg.append('path').attr('class','sphere');
-var layerGrat      = svg.append('path').attr('class','grat');
-var layerCountries = svg.append('g');
-var layerNight     = svg.append('path').attr('class','night');
-var layerTwi1      = svg.append('path').attr('class','twi1');
-var layerTwi2      = svg.append('path').attr('class','twi2');
+// All geographic content lives in one group so <use> copies enable Mercator wrapping
+var worldContent   = svg.append('g').attr('id','world-content');
+var layerSphere    = worldContent.append('path').attr('class','sphere');
+var layerGrat      = worldContent.append('path').attr('class','grat');
+var layerCountries = worldContent.append('g');
+var layerNight     = worldContent.append('path').attr('class','night');
+var layerTwi1      = worldContent.append('path').attr('class','twi1');
+var layerTwi2      = worldContent.append('path').attr('class','twi2');
 
-var sunG = svg.append('g').style('pointer-events','none');
-// Outer glow (blurred, no animation)
+var sunG = worldContent.append('g').style('pointer-events','none');
 sunG.append('circle').attr('class','sun-halo').attr('r', 22)
     .attr('fill','#ffba00').attr('filter','url(#sun-glow)').attr('opacity', 0.55);
-// Inner solid dot
 sunG.append('circle').attr('class','sun-core').attr('r', 7).attr('fill','#ffba00');
+
+// Wrapping copies — visible only in Mercator mode, offset ±worldWidth
+var wcLeft  = svg.append('use').attr('href','#world-content')
+                .style('pointer-events','none').style('display','none');
+var wcRight = svg.append('use').attr('href','#world-content')
+                .style('pointer-events','none').style('display','none');
 
 var graticule = d3.geoGraticule()();
 
@@ -258,18 +263,34 @@ function makeProj(type) {
 
 var proj, pathGen;
 
+// ── Mercator vertical clamp ───────────────────────────────────────────────────
+// Map spans ±π×scale in y from ty.  Keep the map edges pinned to window edges.
+function clampMercTy() {
+  var mercYMax = Math.PI * mercState.scale; // half-height of projected map in px
+  if (2 * mercYMax <= H) {
+    mercState.ty = H / 2;               // map fits window — centre it
+  } else {
+    // map top screen = ty − mercYMax  must be ≤ 0
+    // map bot screen = ty + mercYMax  must be ≥ H
+    mercState.ty = Math.min(mercYMax, Math.max(H - mercYMax, mercState.ty));
+  }
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 function redraw() {
   // Apply "Move Map" (center on sun) before building projection
   if (centerOnSun) {
     var _sun = solarPosition(currentTime());
     if (currentProj === 'mercator') {
-      // tx = W/2 − scale × lon × RAD  (so that lon maps to screen center W/2)
+      // tx = W/2 − scale × lon × RAD  (so that lon maps to screen centre W/2)
       mercState.tx = W/2 - mercState.scale * _sun.longitude * (Math.PI/180);
     } else {
       rotation[0] = -_sun.longitude;
     }
   }
+
+  // Clamp vertical position before building projection
+  if (currentProj === 'mercator') clampMercTy();
 
   proj    = makeProj(currentProj);
   pathGen = d3.geoPath(proj);
@@ -277,6 +298,16 @@ function redraw() {
   layerSphere.attr('d', pathGen({type:'Sphere'}));
   layerGrat.attr('d', pathGen(graticule));
   layerCountries.selectAll('path').attr('d', pathGen);
+
+  // Update horizontal wrapping copies
+  if (currentProj === 'mercator') {
+    var ww = 2 * Math.PI * mercState.scale;
+    wcLeft .attr('transform','translate('+(-ww)+',0)').style('display', null);
+    wcRight.attr('transform','translate('+ ww +',0)').style('display', null);
+  } else {
+    wcLeft .style('display','none');
+    wcRight.style('display','none');
+  }
 
   drawNight();
 }
