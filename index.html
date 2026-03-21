@@ -60,10 +60,12 @@
     /* ── Bottom bar ── */
     #bottom-bar {
       position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-      z-index: 10; display: flex; align-items: center; gap: 10px;
+      z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 6px;
       background: rgba(0,0,0,0.55); padding: 8px 16px; border-radius: 8px;
       backdrop-filter: blur(4px);
     }
+    #bottom-row1 { display: flex; align-items: center; gap: 10px; }
+    #bottom-row2 { display: flex; align-items: flex-start; gap: 10px; }
     #play-btn, #now-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.3);
       border-radius: 4px; color: rgba(255,255,255,0.8);
@@ -120,25 +122,26 @@
         flex-wrap: wrap; justify-content: center;
       }
       #proj-bar button {
-        font-size: 0; padding: 10px 14px; min-height: 38px;
+        font-size: 0; padding: 7px 12px;
       }
       #proj-bar button::before {
         font-size: 13px; content: attr(data-short);
       }
 
       #follow-bar {
-        top: 88px; right: 8px;
+        top: 58px; right: 8px;
       }
-      .seg { padding: 8px 14px; min-height: 38px; }
+      .seg { padding: 6px 12px; }
 
       #bottom-bar {
         left: 8px; right: 8px; transform: none;
-        flex-wrap: wrap; justify-content: center; gap: 8px 12px;
       }
-      #date-slider { width: 100px; }
-      #time-slider { width: 100px; }
-      #time-label  { min-width: 130px; font-size: 11px; }
-      #play-btn, #now-btn { padding: 8px 14px; min-height: 38px; font-size: 14px; }
+      #bottom-row2 { gap: 6px; }
+      #date-slider { width: 38vw; }
+      #time-slider { width: 38vw; }
+      #time-label  { min-width: 120px; font-size: 11px; }
+      #play-btn, #now-btn { padding: 6px 12px; font-size: 14px; }
+      .step-btns button { padding: 3px 8px; font-size: 11px; }
     }
 
     /* ── SVG layer styles ── */
@@ -166,32 +169,30 @@
   <svg id="map"></svg>
 
   <div id="follow-bar">
-    <button class="seg active" data-mode="sun">Move Sun</button>
-    <button class="seg"        data-mode="map">Move Map</button>
+    <button class="seg"        data-mode="sun">Move Sun</button>
+    <button class="seg active" data-mode="map">Move Map</button>
   </div>
 
   <div id="bottom-bar">
-    <button id="now-btn">Now</button>
-
-    <div class="slider-with-steps">
-      <div class="slider-stack">
-        <input type="range" id="date-slider" min="1" max="365">
-        <span class="slider-caption">Date</span>
-      </div>
+    <div id="bottom-row1">
+      <button id="now-btn">Now</button>
       <div class="step-btns">
         <button id="date-up">▲</button>
         <button id="date-down">▼</button>
       </div>
+      <span id="time-label" contenteditable="true" spellcheck="false"></span>
+      <button id="play-btn">&#9654;</button>
     </div>
-
-    <span id="time-label" contenteditable="true" spellcheck="false"></span>
-
-    <div class="slider-stack">
-      <input type="range" id="time-slider" min="0" max="1439">
-      <span class="slider-caption">Time of Day</span>
+    <div id="bottom-row2">
+      <div class="slider-stack">
+        <input type="range" id="date-slider" min="1" max="365">
+        <span class="slider-caption">Date</span>
+      </div>
+      <div class="slider-stack">
+        <input type="range" id="time-slider" min="0" max="1439">
+        <span class="slider-caption">Time of Day</span>
+      </div>
     </div>
-
-    <button id="play-btn">&#9654;</button>
   </div>
 
   <div id="tooltip"></div>
@@ -210,7 +211,7 @@ var RAD = Math.PI / 180, DEG = 180 / Math.PI;
 var W = window.innerWidth, H = window.innerHeight;
 var currentProj = 'globe';
 var rotation = [100, 0, 0];  // default: 100°W, equator [λ, φ, γ]
-var centerOnSun = false;
+var centerOnSun = true;
 var playing = false, playRaf = null, playLastTs = null;
 
 // Per-projection zoom scales (mutable — changed by scroll wheel)
@@ -553,6 +554,52 @@ document.getElementById('map').addEventListener('wheel', function(event) {
   }
   redraw();
 }, { passive: false });
+
+// ── Pinch to zoom (mobile) ────────────────────────────────────────────────────
+var pinch0 = null;
+var mapEl = document.getElementById('map');
+
+mapEl.addEventListener('touchstart', function(event) {
+  if (event.touches.length === 2) {
+    event.preventDefault();
+    var t0 = event.touches[0], t1 = event.touches[1];
+    var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    pinch0 = {
+      dist: Math.sqrt(dx*dx + dy*dy),
+      globeScale: scales.globe, azedScale: scales.azed,
+      mercScale: mercState.scale, mercTx: mercState.tx, mercTy: mercState.ty,
+      midX: (t0.clientX + t1.clientX) / 2,
+      midY: (t0.clientY + t1.clientY) / 2
+    };
+  }
+}, { passive: false });
+
+mapEl.addEventListener('touchmove', function(event) {
+  if (event.touches.length === 2 && pinch0) {
+    event.preventDefault();
+    var t0 = event.touches[0], t1 = event.touches[1];
+    var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    var factor = Math.sqrt(dx*dx + dy*dy) / pinch0.dist;
+    if (currentProj === 'mercator') {
+      var svgRect = mapEl.getBoundingClientRect();
+      var cx = pinch0.midX - svgRect.left, cy = pinch0.midY - svgRect.top;
+      var newScale = Math.max(50, Math.min(pinch0.mercScale * factor, W * 50));
+      var ratio = newScale / pinch0.mercScale;
+      mercState.scale = newScale;
+      mercState.tx = cx + (pinch0.mercTx - cx) * ratio;
+      mercState.ty = cy + (pinch0.mercTy - cy) * ratio;
+    } else if (currentProj === 'globe') {
+      scales.globe = Math.max(80, Math.min(pinch0.globeScale * factor, Math.min(W,H) * 5));
+    } else {
+      scales.azed = Math.max(40, Math.min(pinch0.azedScale * factor, Math.min(W,H) * 5));
+    }
+    redraw();
+  }
+}, { passive: false });
+
+mapEl.addEventListener('touchend', function(event) {
+  if (event.touches.length < 2) pinch0 = null;
+});
 
 // ── Projection buttons ────────────────────────────────────────────────────────
 document.querySelectorAll('#proj-bar button').forEach(function(btn) {
