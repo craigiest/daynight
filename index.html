@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 22:35 UTC</div>
+  <div id="version-stamp">v.2026-03-21 22:45 UTC</div>
 
   <svg id="map"></svg>
 
@@ -523,25 +523,45 @@ svg.call(d3.drag()
     drag0 = {
       x: event.x, y: event.y,
       rot: rotation.slice(),
-      mTx: mercState.tx, mTy: mercState.ty
+      mTx: mercState.tx, mTy: mercState.ty,
+      timeVal: +document.getElementById('time-slider').value
     };
   })
   .on('drag', function(event) {
     if (!drag0 || isPinching) return;
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
-      if (centerOnSun) return;
-      mercState.tx = drag0.mTx + dx;
-      mercState.ty = drag0.mTy + dy;
+      if (centerOnSun) {
+        // Horizontal drag moves the sun (changes time); vertical pans the map
+        var dMin = -dx * 1440 / (2 * Math.PI * mercState.scale);
+        document.getElementById('time-slider').value =
+          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+        mercState.ty = drag0.mTy + dy;
+      } else {
+        mercState.tx = drag0.mTx + dx;
+        mercState.ty = drag0.mTy + dy;
+      }
     } else if (currentProj === 'globe') {
       var s = 180 / (Math.PI * scales.globe);
-      if (!centerOnSun) rotation[0] = drag0.rot[0] + dx * s;
+      if (centerOnSun) {
+        // Horizontal drag moves the sun (changes time); vertical tilts the earth
+        var dMin = -dx * 1440 / (2 * Math.PI * scales.globe);
+        document.getElementById('time-slider').value =
+          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+      } else {
+        rotation[0] = drag0.rot[0] + dx * s;
+      }
       rotation[1] = Math.max(-90, Math.min(90, drag0.rot[1] - dy * s));
     } else {
-      // Polar az-ed: spin only (λ). Sens: 360 / (π² × scale)
-      if (centerOnSun) return;
-      var s = 360 / (Math.PI * Math.PI * scales.azed);
-      rotation[0] = drag0.rot[0] + dx * s;
+      // Polar az-ed
+      if (centerOnSun) {
+        var dMin = -dx * 1440 / (2 * Math.PI * scales.azed);
+        document.getElementById('time-slider').value =
+          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+      } else {
+        var s = 360 / (Math.PI * Math.PI * scales.azed);
+        rotation[0] = drag0.rot[0] + dx * s;
+      }
     }
     redraw();
   })
@@ -570,35 +590,41 @@ document.getElementById('map').addEventListener('wheel', function(event) {
   redraw();
 }, { passive: false });
 
-// ── Pinch to zoom (mobile) ────────────────────────────────────────────────────
-// Note: pointerdown (used by d3.drag) fires before touchstart, so we can't
-// preventDefault in touchstart to stop d3. Instead we use isPinching to gate
-// the drag handlers, and touch-action:none on the SVG prevents browser zoom.
+// ── Pinch / two-finger drag to zoom (mobile) ─────────────────────────────────
+// Uses pointer events (same system as d3.drag) so they're always delivered.
+// Tracks each active pointer by ID; when 2 are down, switches to zoom mode.
+// Zoom = pinch spread/squeeze AND/OR two-finger vertical drag (up = zoom in).
 var pinch0 = null;
+var activePointers = new Map();
 var mapEl = document.getElementById('map');
 
-mapEl.addEventListener('touchstart', function(event) {
-  if (event.touches.length >= 2) {
+mapEl.addEventListener('pointerdown', function(event) {
+  activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (activePointers.size === 2) {
     isPinching = true;
-    drag0 = null;  // cancel any active drag
-    var t0 = event.touches[0], t1 = event.touches[1];
-    var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+    drag0 = null;
+    var pts = Array.from(activePointers.values());
+    var dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
     pinch0 = {
-      dist: Math.sqrt(dx*dx + dy*dy),
+      dist: Math.max(1, Math.sqrt(dx*dx + dy*dy)),
+      midX: (pts[0].x + pts[1].x) / 2,
+      midY: (pts[0].y + pts[1].y) / 2,
       globeScale: scales.globe, azedScale: scales.azed,
-      mercScale: mercState.scale, mercTx: mercState.tx, mercTy: mercState.ty,
-      midX: (t0.clientX + t1.clientX) / 2,
-      midY: (t0.clientY + t1.clientY) / 2
+      mercScale: mercState.scale, mercTx: mercState.tx, mercTy: mercState.ty
     };
   }
-}, { passive: true });
+});
 
-mapEl.addEventListener('touchmove', function(event) {
-  if (event.touches.length >= 2 && pinch0) {
-    event.preventDefault();
-    var t0 = event.touches[0], t1 = event.touches[1];
-    var dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
-    var factor = Math.sqrt(dx*dx + dy*dy) / pinch0.dist;
+mapEl.addEventListener('pointermove', function(event) {
+  if (!activePointers.has(event.pointerId)) return;
+  activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (activePointers.size >= 2 && pinch0) {
+    var pts = Array.from(activePointers.values());
+    var dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+    var dist = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+    var midY = (pts[0].y + pts[1].y) / 2;
+    // Pinch spread/squeeze + two-finger vertical drag both drive zoom
+    var factor = (dist / pinch0.dist) * Math.pow(1.004, pinch0.midY - midY);
     if (currentProj === 'mercator') {
       var svgRect = mapEl.getBoundingClientRect();
       var cx = pinch0.midX - svgRect.left, cy = pinch0.midY - svgRect.top;
@@ -614,17 +640,16 @@ mapEl.addEventListener('touchmove', function(event) {
     }
     redraw();
   }
-}, { passive: false });
-
-mapEl.addEventListener('touchend', function(event) {
-  if (event.touches.length < 2) {
-    isPinching = false;
-    pinch0 = null;
-  }
 });
 
-// iOS Safari fires gesturestart/gesturechange for native pinch — prevent them
-// so the browser doesn't intercept the gesture before our touchmove handler.
+['pointerup', 'pointercancel'].forEach(function(type) {
+  mapEl.addEventListener(type, function(event) {
+    activePointers.delete(event.pointerId);
+    if (activePointers.size < 2) { isPinching = false; pinch0 = null; }
+  });
+});
+
+// iOS Safari: prevent native gesture events from stealing the pinch
 mapEl.addEventListener('gesturestart',  function(e) { e.preventDefault(); }, { passive: false });
 mapEl.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
 
