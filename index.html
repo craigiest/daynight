@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day and Night World Map</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #2b2e3b;
+    }
+
+    #wrapper {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+    }
+
+    #chartdiv {
+      width: 100%;
+      height: 100%;
+      background: #454a58;
+    }
+
+    #proj-bar {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 6px 10px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+    }
+
+    #proj-bar button {
+      padding: 5px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.65);
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+
+    #proj-bar button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    #proj-bar button.active {
+      background: rgba(255, 186, 0, 0.2);
+      border-color: #ffba00;
+      color: #ffba00;
+    }
+  </style>
+
+  <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/map.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+  <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+</head>
+<body>
+
+<div id="wrapper">
+  <div id="proj-bar">
+    <button class="active" data-proj="mercator">Flat Map</button>
+    <button data-proj="globe">Globe</button>
+    <button data-proj="north">North Pole</button>
+    <button data-proj="south">South Pole</button>
+  </div>
+  <div id="chartdiv"></div>
+</div>
+
+<script>
+var root = am5.Root.new("chartdiv");
+var baseTime = new Date().getTime();
+var centerOnSun = false;
+var offset = new Date().getTimezoneOffset() * 60 * 1000;
+
+root.setThemes([
+  am5themes_Animated.new(root),
+  am5themes_Dark.new(root)
+]);
+
+var chart = root.container.children.push(am5map.MapChart.new(root, {
+  panX: "rotateX",
+  panY: "rotateY",
+  projection: am5map.geoMercator()
+}));
+
+// Background polygon — fills the ocean area in globe/polar views
+var backgroundSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {}));
+backgroundSeries.mapPolygons.template.setAll({
+  fill: root.interfaceColors.get("alternativeBackground"),
+  fillOpacity: 0,
+  strokeOpacity: 0
+});
+backgroundSeries.data.push({
+  geometry: am5map.getGeoRectangle(90, 180, -90, -180)
+});
+
+// Countries
+var polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
+  geoJSON: am5geodata_worldLow
+}));
+
+root.systemTooltip.setAll({
+  getFillFromSprite: false,
+  getStrokeFromSprite: false,
+  autoTextColor: true
+});
+root.systemTooltip.get("background").setAll({
+  fill: am5.color(0xffffff),
+  fillOpacity: 0.8
+});
+
+polygonSeries.mapPolygons.template.setAll({
+  tooltip: root.systemTooltip,
+  fill: am5.color(0x47c78a),
+  stroke: am5.color(0x454a58),
+  tooltipText: "{name}",
+  tooltipPosition: "pointer",
+  toggleKey: "active",
+  cursorOverStyle: "pointer"
+});
+
+// Click a country to rotate the view to its centroid
+var previousPolygon;
+polygonSeries.mapPolygons.template.on("active", function (active, target) {
+  if (previousPolygon && previousPolygon !== target) {
+    previousPolygon.set("active", false);
+  }
+  if (target.get("active")) {
+    var centroid = target.geoCentroid();
+    if (centroid) {
+      chart.animate({ key: "rotationX", to: -centroid.longitude, duration: 1500, easing: am5.ease.inOut(am5.ease.cubic) });
+      chart.animate({ key: "rotationY", to: -centroid.latitude, duration: 1500, easing: am5.ease.inOut(am5.ease.cubic) });
+    }
+  }
+  previousPolygon = target;
+});
+
+// Sun marker — glowing pulsing circle at the sub-solar point
+var sunSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+
+sunSeries.bullets.push(function () {
+  var glow = am5.Circle.new(root, {
+    radius: 18,
+    fill: am5.color(0xffba00),
+    filter: "blur(5px)"
+  });
+  glow.animate({
+    key: "radius",
+    duration: 2000,
+    to: 23,
+    loops: Infinity,
+    easing: am5.ease.yoyo(am5.ease.linear)
+  });
+  return am5.Bullet.new(root, { sprite: glow });
+});
+
+sunSeries.bullets.push(function () {
+  return am5.Bullet.new(root, {
+    sprite: am5.Circle.new(root, { radius: 14, fill: am5.color(0xffba00) })
+  });
+});
+
+var sunDataItem = sunSeries.pushDataItem({});
+
+// Night shadow — three overlapping geo circles create a graduated twilight band
+var nightSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {}));
+nightSeries.mapPolygons.template.setAll({
+  fill: am5.color(0x000000),
+  fillOpacity: 0.25,
+  strokeOpacity: 0
+});
+var nightDataItem0 = nightSeries.pushDataItem({});
+var nightDataItem1 = nightSeries.pushDataItem({});
+var nightDataItem2 = nightSeries.pushDataItem({});
+
+// ── Bottom controls: play, slider, editable time label ───────────────────────
+var bottomContainer = chart.children.push(am5.Container.new(root, {
+  y: am5.percent(95),
+  centerX: am5.p50,
+  x: am5.p50,
+  paddingLeft: 20,
+  paddingRight: 20,
+  width: am5.percent(90),
+  layout: root.horizontalLayout
+}));
+
+var playButton = bottomContainer.children.push(am5.Button.new(root, {
+  themeTags: ["play"],
+  centerY: am5.p50,
+  marginRight: 15,
+  icon: am5.Graphics.new(root, { themeTags: ["icon"] })
+}));
+
+playButton.events.on("click", function () {
+  if (playButton.get("active")) {
+    slider.set("start", slider.get("start") + 0.0001);
+  } else {
+    slider.animate({
+      key: "start",
+      to: 1,
+      duration: 15000 * (1 - slider.get("start"))
+    });
+  }
+});
+
+var slider = bottomContainer.children.push(am5.Slider.new(root, {
+  orientation: "horizontal",
+  start: 0.5,
+  centerY: am5.p50
+}));
+
+slider.on("start", function (start) {
+  if (start === 1) playButton.set("active", false);
+});
+
+slider.events.on("rangechanged", function () {
+  updateDayNight(sliderTime());
+});
+
+var timeLabel = bottomContainer.children.push(am5.EditableLabel.new(root, {
+  multiLine: false,
+  marginLeft: 20,
+  centerY: am5.p50
+}));
+timeLabel.get("background").set("strokeOpacity", 0.5);
+
+timeLabel.on("active", function () {
+  var date = chart.getDateFormatter().parse(timeLabel.get("text"), "MMM dd yyyy HH:mm");
+  if (date) {
+    baseTime = date.getTime();
+    slider.set("start", 0.5);
+    updateDayNight(baseTime);
+  }
+});
+
+// ── "Move Sun / Move Map" toggle (top-right corner) ──────────────────────────
+var followContainer = chart.children.push(am5.Container.new(root, {
+  layout: root.horizontalLayout,
+  x: am5.p100,
+  centerX: am5.p100,
+  y: 20,
+  dx: -20
+}));
+
+followContainer.children.push(am5.Label.new(root, {
+  centerY: am5.p50,
+  text: "Move Sun"
+}));
+
+var followToggle = followContainer.children.push(am5.Button.new(root, {
+  themeTags: ["switch"],
+  centerY: am5.p50,
+  icon: am5.Circle.new(root, { themeTags: ["icon"] })
+}));
+
+followContainer.children.push(am5.Label.new(root, {
+  centerY: am5.p50,
+  text: "Move Map"
+}));
+
+followToggle.on("active", function (active) {
+  centerOnSun = active;
+  updateDayNight(sliderTime());
+});
+
+// ── Projection switching ──────────────────────────────────────────────────────
+function setProjection(type) {
+  document.querySelectorAll("#proj-bar button").forEach(function (btn) {
+    btn.classList.toggle("active", btn.dataset.proj === type);
+  });
+
+  if (type === "mercator") {
+    chart.set("projection", am5map.geoMercator());
+    backgroundSeries.mapPolygons.template.set("fillOpacity", 0);
+    chart.animate({ key: "rotationX", to: 0, duration: 600 });
+    chart.animate({ key: "rotationY", to: 0, duration: 600 });
+    setTimeout(function () { chart.goHome(); }, 650);
+
+  } else if (type === "globe") {
+    chart.set("projection", am5map.geoOrthographic());
+    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
+    chart.animate({ key: "rotationX", to: 0, duration: 600 });
+    chart.animate({ key: "rotationY", to: 0, duration: 600 });
+    setTimeout(function () { chart.goHome(); }, 650);
+
+  } else if (type === "north") {
+    // Azimuthal equidistant centered on the North Pole (rotationY = -90)
+    chart.set("projection", am5map.geoAzimuthalEquidistant());
+    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
+    chart.animate({ key: "rotationX", to: 0, duration: 800 });
+    chart.animate({ key: "rotationY", to: -90, duration: 800 });
+
+  } else if (type === "south") {
+    // Azimuthal equidistant centered on the South Pole (rotationY = +90)
+    chart.set("projection", am5map.geoAzimuthalEquidistant());
+    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
+    chart.animate({ key: "rotationX", to: 0, duration: 800 });
+    chart.animate({ key: "rotationY", to: 90, duration: 800 });
+  }
+}
+
+document.querySelectorAll("#proj-bar button").forEach(function (btn) {
+  btn.addEventListener("click", function () { setProjection(btn.dataset.proj); });
+});
+
+// ── Time helpers ──────────────────────────────────────────────────────────────
+// Slider at 0.5 = baseTime (current time by default); range = ±1 day
+function sliderTime() {
+  return (slider.get("start", 0.5) - 0.5) * am5.time.getDuration("day", 2) + baseTime;
+}
+
+function updateDayNight(time) {
+  var sun = solarPosition(time);
+  sunDataItem.set("longitude", sun.longitude);
+  sunDataItem.set("latitude", sun.latitude);
+
+  // The night center is the antipodal point of the sun
+  var anti = { longitude: sun.longitude + 180, latitude: -sun.latitude };
+  // Three circles at different radii create a soft twilight gradient
+  nightDataItem0.set("geometry", am5map.getGeoCircle(anti, 92));
+  nightDataItem1.set("geometry", am5map.getGeoCircle(anti, 90));
+  nightDataItem2.set("geometry", am5map.getGeoCircle(anti, 88));
+
+  if (centerOnSun) {
+    chart.set("rotationX", -sun.longitude);
+  }
+
+  timeLabel.set("text", chart.getDateFormatter().format(new Date(time), "MMM dd yyyy HH:mm"));
+}
+
+// ── Solar position calculation (NOAA algorithm) ───────────────────────────────
+// Based on: http://bl.ocks.org/mbostock/4597134
+function solarPosition(time) {
+  var centuries = (time - Date.UTC(2000, 0, 1, 12)) / 864e5 / 36525;
+  var lon = ((am5.time.round(new Date(time), "day", 1).getTime() - time - offset) / 864e5) * 360 - 180;
+  return am5map.normalizeGeoPoint({
+    longitude: lon - equationOfTime(centuries) * am5.math.DEGREES,
+    latitude: solarDeclination(centuries) * am5.math.DEGREES
+  });
+}
+
+// All angles in RADIANS unless noted. Equations from NOAA's Solar Calculator:
+// http://www.esrl.noaa.gov/gmd/grad/solcalc/
+function equationOfTime(c) {
+  var e = eccentricityEarthOrbit(c),
+      m = solarGeometricMeanAnomaly(c),
+      l = solarGeometricMeanLongitude(c),
+      y = Math.tan(obliquityCorrection(c) / 2);
+  y *= y;
+  return y * Math.sin(2 * l)
+       - 2 * e * Math.sin(m)
+       + 4 * e * y * Math.sin(m) * Math.cos(2 * l)
+       - 0.5 * y * y * Math.sin(4 * l)
+       - 1.25 * e * e * Math.sin(2 * m);
+}
+
+function solarDeclination(c) {
+  return Math.asin(Math.sin(obliquityCorrection(c)) * Math.sin(solarApparentLongitude(c)));
+}
+
+function solarApparentLongitude(c) {
+  return solarTrueLongitude(c)
+       - (0.00569 + 0.00478 * Math.sin((125.04 - 1934.136 * c) * am5.math.RADIANS)) * am5.math.RADIANS;
+}
+
+function solarTrueLongitude(c) {
+  return solarGeometricMeanLongitude(c) + solarEquationOfCenter(c);
+}
+
+function solarGeometricMeanAnomaly(c) {
+  return (357.52911 + c * (35999.05029 - 0.0001537 * c)) * am5.math.RADIANS;
+}
+
+function solarGeometricMeanLongitude(c) {
+  var l = (280.46646 + c * (36000.76983 + c * 0.0003032)) % 360;
+  return ((l < 0 ? l + 360 : l) / 180) * Math.PI;
+}
+
+function solarEquationOfCenter(c) {
+  var m = solarGeometricMeanAnomaly(c);
+  return (Math.sin(m) * (1.914602 - c * (0.004817 + 0.000014 * c))
+        + Math.sin(m + m) * (0.019993 - 0.000101 * c)
+        + Math.sin(m + m + m) * 0.000289) * am5.math.RADIANS;
+}
+
+function obliquityCorrection(c) {
+  return meanObliquityOfEcliptic(c)
+       + 0.00256 * Math.cos((125.04 - 1934.136 * c) * am5.math.RADIANS) * am5.math.RADIANS;
+}
+
+function meanObliquityOfEcliptic(c) {
+  return (23 + (26 + (21.448 - c * (46.815 + c * (0.00059 - c * 0.001813))) / 60) / 60) * am5.math.RADIANS;
+}
+
+function eccentricityEarthOrbit(c) {
+  return 0.016708634 - c * (0.000042037 + 0.0000001267 * c);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+chart.appear(1000, 100);
+updateDayNight(baseTime);
+</script>
+
+</body>
+</html>
