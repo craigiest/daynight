@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 19:45 UTC</div>
+  <div id="version-stamp">v.2026-03-21 20:00 UTC</div>
 
   <svg id="map"></svg>
 
@@ -485,7 +485,26 @@ document.getElementById('map').addEventListener('wheel', function(event) {
 // ── Projection buttons ────────────────────────────────────────────────────────
 document.querySelectorAll('#proj-bar button').forEach(function(btn) {
   btn.addEventListener('click', function() {
-    currentProj = btn.dataset.proj;
+    var toProj = btn.dataset.proj;
+    if (toProj === currentProj) return;
+
+    // Transition state before switching
+    if (toProj === 'globe') {
+      if (currentProj === 'mercator') {
+        // Centre the globe on the mercator's screen centre point
+        var center = proj.invert([W/2, H/2]);
+        if (center) rotation = [-center[0], -center[1], 0];
+      } else if (currentProj === 'north') {
+        // Look straight down at north pole, same longitude orientation
+        rotation[1] = -90;
+        scales.globe = scales.azed; // equal scale at the pole
+      } else if (currentProj === 'south') {
+        rotation[1] = 90;
+        scales.globe = scales.azed;
+      }
+    }
+
+    currentProj = toProj;
     document.querySelectorAll('#proj-bar button').forEach(function(b) {
       b.classList.toggle('active', b === btn);
     });
