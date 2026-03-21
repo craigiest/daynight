@@ -6,7 +6,7 @@
   <title>Day and Night World Map</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; background: #2b2e3b; }
+    html, body { width: 100%; height: 100%; background: #000; }
     #wrapper { position: relative; width: 100%; height: 100vh; overflow: hidden; }
 
     #map { display: block; width: 100%; height: 100%; cursor: grab; overflow: visible; }
@@ -104,7 +104,7 @@
     }
 
     /* ── SVG layer styles ── */
-    .sphere   { fill: #2a3a4d; }
+    .sphere   { fill: #020408; }
     .grat     { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 0.5; }
     .country  { fill: #47c78a; stroke: #354050; stroke-width: 0.4; cursor: pointer; }
     .country:hover { fill: #62d99b; }
@@ -123,7 +123,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 21:10 UTC</div>
+  <div id="version-stamp">v.2026-03-21 21:24 UTC</div>
 
   <svg id="map"></svg>
 
@@ -219,7 +219,8 @@ var worldContent   = svg.append('g').attr('id','world-content');
 var layerSphere    = worldContent.append('path').attr('class','sphere');
 var layerGrat      = worldContent.append('path').attr('class','grat');
 
-// Reference parallels — use geoCircle so antimeridian is handled correctly
+// Reference parallels — LineString (not polygon) avoids antimeridian/limb artifacts.
+// Stop at lon 179 so D3 never closes across ±180°; the 1° gap is invisible in practice.
 var PARALLELS = [
   { lat:    0,   cls: 'lat-equator' },
   { lat:  23.45, cls: 'lat-tropic'  },
@@ -227,18 +228,16 @@ var PARALLELS = [
   { lat:  66.55, cls: 'lat-arctic'  },
   { lat: -66.55, cls: 'lat-arctic'  },
 ];
-var layerLatLines = worldContent.append('g').style('pointer-events','none');
-PARALLELS.forEach(function(p) {
-  // A parallel at latitude φ is a small circle centred on the nearest pole
-  // with great-circle radius (90 − |φ|).
-  var pole   = [0, p.lat >= 0 ? 90 : -90];
-  var radius = 90 - Math.abs(p.lat);
-  layerLatLines.append('path')
-    .datum(d3.geoCircle().center(pole).radius(radius).precision(1)())
-    .attr('class', p.cls);
-});
 
 var layerCountries = worldContent.append('g');
+
+// Lat lines go AFTER countries so they render on top of land masses too
+var layerLatLines = worldContent.append('g').style('pointer-events','none');
+PARALLELS.forEach(function(p) {
+  var coords = d3.range(-180, 180, 1).map(function(lon) { return [lon, p.lat]; });
+  layerLatLines.append('path').datum({ type:'LineString', coordinates:coords }).attr('class', p.cls);
+});
+
 var layerNight     = worldContent.append('path').attr('class','night');
 
 var sunG = worldContent.append('g').style('pointer-events','none');
@@ -324,8 +323,8 @@ function redraw() {
 
   layerSphere.attr('d', pathGen({type:'Sphere'}));
   layerGrat.attr('d', pathGen(graticule));
-  layerLatLines.selectAll('path').attr('d', pathGen);
   layerCountries.selectAll('path').attr('d', pathGen);
+  layerLatLines.selectAll('path').attr('d', pathGen);
 
   // Update horizontal wrapping copies
   if (currentProj === 'mercator') {
