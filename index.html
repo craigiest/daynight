@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 22:45 UTC</div>
+  <div id="version-stamp">v.2026-03-21 22:51 UTC</div>
 
   <svg id="map"></svg>
 
@@ -220,6 +220,7 @@ var RAD = Math.PI / 180, DEG = 180 / Math.PI;
 var W = window.innerWidth, H = window.innerHeight;
 var currentProj = 'globe';
 var rotation = [100, 0, 0];  // default: 100°W, equator [λ, φ, γ]
+var sunOffsetLon = 0;        // longitude offset from sun in Move Map mode (degrees)
 var centerOnSun = true;
 var playing = false, playRaf = null, playLastTs = null;
 
@@ -362,10 +363,10 @@ function redraw() {
   if (centerOnSun) {
     var _sun = solarPosition(currentTime());
     if (currentProj === 'mercator') {
-      // tx = W/2 − scale × lon × RAD  (so that lon maps to screen centre W/2)
-      mercState.tx = W/2 - mercState.scale * _sun.longitude * (Math.PI/180);
+      // Center on sun + user longitude offset (offset shifts which lon is at screen center)
+      mercState.tx = W/2 - mercState.scale * (_sun.longitude - sunOffsetLon) * RAD;
     } else {
-      rotation[0] = -_sun.longitude;
+      rotation[0] = -_sun.longitude + sunOffsetLon;
     }
   }
 
@@ -524,7 +525,7 @@ svg.call(d3.drag()
       x: event.x, y: event.y,
       rot: rotation.slice(),
       mTx: mercState.tx, mTy: mercState.ty,
-      timeVal: +document.getElementById('time-slider').value
+      sunOffset: sunOffsetLon
     };
   })
   .on('drag', function(event) {
@@ -532,10 +533,8 @@ svg.call(d3.drag()
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
       if (centerOnSun) {
-        // Horizontal drag moves the sun (changes time); vertical pans the map
-        var dMin = -dx * 1440 / (2 * Math.PI * mercState.scale);
-        document.getElementById('time-slider').value =
-          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+        // Horizontal: orbit around sun (shift viewing longitude); vertical: pan
+        sunOffsetLon = drag0.sunOffset + dx * 180 / (Math.PI * mercState.scale);
         mercState.ty = drag0.mTy + dy;
       } else {
         mercState.tx = drag0.mTx + dx;
@@ -544,23 +543,19 @@ svg.call(d3.drag()
     } else if (currentProj === 'globe') {
       var s = 180 / (Math.PI * scales.globe);
       if (centerOnSun) {
-        // Horizontal drag moves the sun (changes time); vertical tilts the earth
-        var dMin = -dx * 1440 / (2 * Math.PI * scales.globe);
-        document.getElementById('time-slider').value =
-          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+        // Horizontal: orbit around sun; vertical: tilt the earth
+        sunOffsetLon = drag0.sunOffset + dx * s;
       } else {
         rotation[0] = drag0.rot[0] + dx * s;
       }
       rotation[1] = Math.max(-90, Math.min(90, drag0.rot[1] - dy * s));
     } else {
       // Polar az-ed
+      var s = 180 / (Math.PI * scales.azed);
       if (centerOnSun) {
-        var dMin = -dx * 1440 / (2 * Math.PI * scales.azed);
-        document.getElementById('time-slider').value =
-          Math.round(((drag0.timeVal + dMin) % 1440 + 1440) % 1440);
+        sunOffsetLon = drag0.sunOffset + dx * s;
       } else {
-        var s = 360 / (Math.PI * Math.PI * scales.azed);
-        rotation[0] = drag0.rot[0] + dx * s;
+        rotation[0] = drag0.rot[0] + dx * 360 / (Math.PI * Math.PI * scales.azed);
       }
     }
     redraw();
@@ -770,6 +765,7 @@ document.getElementById('now-btn').addEventListener('click', function() {
 document.querySelectorAll('#follow-bar .seg').forEach(function(btn) {
   btn.addEventListener('click', function() {
     centerOnSun = this.dataset.mode === 'map';
+    if (centerOnSun) sunOffsetLon = 0;
     document.querySelectorAll('#follow-bar .seg').forEach(function(b) {
       b.classList.toggle('active', b === btn);
     });
