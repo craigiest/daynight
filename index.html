@@ -66,6 +66,13 @@
     }
     /* Row wrappers are invisible on desktop — children flow into the parent flex */
     #bottom-row1, #bottom-row2 { display: contents; }
+    /* Order works for both desktop (flat siblings) and mobile (within each row) */
+    #now-btn                              { order: 1; }
+    #bottom-row2 > .slider-stack:first-child { order: 2; }  /* date slider */
+    #bottom-row1 > .step-btns            { order: 3; }
+    #time-label                           { order: 4; }
+    #bottom-row2 > .slider-stack:last-child  { order: 5; }  /* time slider */
+    #play-btn                             { order: 6; }
     #play-btn, #now-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.3);
       border-radius: 4px; color: rgba(255,255,255,0.8);
@@ -166,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 21:39 UTC</div>
+  <div id="version-stamp">v.2026-03-21 22:35 UTC</div>
 
   <svg id="map"></svg>
 
@@ -507,6 +514,10 @@ d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(f
 var drag0 = null;
 var isPinching = false;
 svg.call(d3.drag()
+  .filter(function(event) {
+    // Reject drag while pinching; also reject any non-primary mouse buttons
+    return !isPinching && !event.button;
+  })
   .on('start', function(event) {
     if (isPinching) return;
     drag0 = {
@@ -611,6 +622,11 @@ mapEl.addEventListener('touchend', function(event) {
     pinch0 = null;
   }
 });
+
+// iOS Safari fires gesturestart/gesturechange for native pinch — prevent them
+// so the browser doesn't intercept the gesture before our touchmove handler.
+mapEl.addEventListener('gesturestart',  function(e) { e.preventDefault(); }, { passive: false });
+mapEl.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
 
 // ── Projection buttons ────────────────────────────────────────────────────────
 document.querySelectorAll('#proj-bar button').forEach(function(btn) {
