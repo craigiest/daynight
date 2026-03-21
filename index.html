@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-22 00:22 UTC</div>
+  <div id="version-stamp">v.2026-03-22 00:38 UTC</div>
 
   <svg id="map"></svg>
 
@@ -606,6 +606,7 @@ var activePointers = new Map();
 var mapEl = document.getElementById('map');
 
 mapEl.addEventListener('pointerdown', function(event) {
+  if (event.pointerType === 'mouse') return; // mouse zoom handled by wheel; skip pinch tracking
   activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   if (activePointers.size === 2) {
     isPinching = true;
@@ -649,8 +650,10 @@ mapEl.addEventListener('pointermove', function(event) {
   }
 });
 
+// Listen on document so a pointer released outside the SVG still cleans up,
+// preventing ghost entries that would falsely trigger pinch-zoom on the next drag.
 ['pointerup', 'pointercancel'].forEach(function(type) {
-  mapEl.addEventListener(type, function(event) {
+  document.addEventListener(type, function(event) {
     activePointers.delete(event.pointerId);
     if (activePointers.size < 2) { isPinching = false; pinch0 = null; }
   });
