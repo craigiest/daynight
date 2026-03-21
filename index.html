@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 23:57 UTC</div>
+  <div id="version-stamp">v.2026-03-22 00:09 UTC</div>
 
   <svg id="map"></svg>
 
@@ -777,20 +777,8 @@ document.getElementById('now-btn').addEventListener('click', function() {
 document.querySelectorAll('#follow-bar .seg').forEach(function(btn) {
   btn.addEventListener('click', function() {
     centerOnSun = this.dataset.mode === 'map';
-    if (centerOnSun) {
-      // Preserve the sun's current visual position instead of snapping to centre.
-      // Compute sunOffsetLon so that redraw() leaves the map where it already is.
-      var _sun = solarPosition(currentTime());
-      if (currentProj === 'mercator') {
-        // In Move Map: tx = W/2 - scale*(sun.lon - sunOffsetLon)*RAD
-        // Solve for sunOffsetLon that keeps current tx:
-        sunOffsetLon = _sun.longitude - (W / 2 - mercState.tx) / (mercState.scale * RAD);
-      } else {
-        // In Move Map: rotation[0] = -sun.lon + sunOffsetLon
-        // Keep rotation[0] as-is:
-        sunOffsetLon = rotation[0] + _sun.longitude;
-      }
-    }
+    // Don't reset sunOffsetLon — keep the sun at its current offset so the view
+    // doesn't jump back to centre when switching from Move Sun to Move Map.
     document.querySelectorAll('#follow-bar .seg').forEach(function(b) {
       b.classList.toggle('active', b === btn);
     });
