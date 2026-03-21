@@ -172,14 +172,13 @@ var scales = {
   azed:  Math.min(W, H) * 0.47 / Math.PI
 };
 
-// Mercator state: rotation (center longitude λ₀ — center of view = −λ₀), scale, ty
-// Uses .rotate([λ₀, 0]) so the cylinder axis shifts when panning — true reprojection.
+// Mercator state: tx/ty translation, scale — translate-based pan/zoom.
 var mercState = (function() {
   var p = d3.geoMercator();
   p.fitExtent([[20,60],[W-20,H-80]], {type:'Feature',geometry:{type:'MultiPoint',
     coordinates:[[-179.9,-60],[179.9,75]]}});
   var t = p.translate();
-  return { rotation: 0, scale: p.scale(), ty: t[1] };
+  return { scale: p.scale(), tx: t[0], ty: t[1] };
 })();
 
 // Time state — default to Mar 21 2026 16:00 UTC
@@ -233,12 +232,9 @@ var graticule = d3.geoGraticule()();
 function makeProj(type) {
   switch (type) {
     case 'mercator':
-      // rotate([λ₀,0]) makes the Mercator cylinder axis shift — actual reprojection,
-      // not just a pixel pan. Center of view is at longitude −λ₀.
       return d3.geoMercator()
-        .rotate([mercState.rotation, 0])
         .scale(mercState.scale)
-        .translate([W/2, mercState.ty]);
+        .translate([mercState.tx, mercState.ty]);
     case 'globe':
       return d3.geoOrthographic()
         .scale(scales.globe)
@@ -268,8 +264,8 @@ function redraw() {
   if (centerOnSun) {
     var _sun = solarPosition(currentTime());
     if (currentProj === 'mercator') {
-      // Center = −λ₀, so to show sun.longitude at center: λ₀ = −sun.longitude
-      mercState.rotation = -_sun.longitude;
+      // tx = W/2 − scale × lon × RAD  (so that lon maps to screen center W/2)
+      mercState.tx = W/2 - mercState.scale * _sun.longitude * (Math.PI/180);
     } else {
       rotation[0] = -_sun.longitude;
     }
@@ -409,15 +405,14 @@ svg.call(d3.drag()
     drag0 = {
       x: event.x, y: event.y,
       rot: rotation.slice(),
-      mRot: mercState.rotation, mTy: mercState.ty
+      mTx: mercState.tx, mTy: mercState.ty
     };
   })
   .on('drag', function(event) {
     if (!drag0 || centerOnSun) return;
     var dx = event.x - drag0.x, dy = event.y - drag0.y;
     if (currentProj === 'mercator') {
-      // screen_x = scale*(λ+λ₀)*RAD + W/2 → Δλ₀ = dx*DEG/scale
-      mercState.rotation = drag0.mRot + dx * DEG / mercState.scale;
+      mercState.tx = drag0.mTx + dx;
       mercState.ty = drag0.mTy + dy;
     } else if (currentProj === 'globe') {
       // Sensitivity: degrees per pixel ≈ 180 / (π × scale)
@@ -440,15 +435,14 @@ document.getElementById('map').addEventListener('wheel', function(event) {
   var factor = event.deltaY < 0 ? 1.15 : 1/1.15;
 
   if (currentProj === 'mercator') {
-    var cx = event.offsetX, cy = event.offsetY;
+    var svgRect = document.getElementById('map').getBoundingClientRect();
+    var cx = event.clientX - svgRect.left;
+    var cy = event.clientY - svgRect.top;
     var oldScale = mercState.scale;
     mercState.scale = Math.max(50, Math.min(oldScale * factor, W * 50));
-    // screen_x = scale*(λ+λ₀)*RAD + W/2 → to pin longitude under cursor:
-    // λ₀_new = λ₀_old + (cx−W/2)×DEG×(1/k_new − 1/k_old)
-    mercState.rotation += (cx - W/2) * DEG * (1/mercState.scale - 1/oldScale);
-    // screen_y = scale*y_merc + ty → to pin latitude under cursor:
-    // ty_new = cy + (ty_old − cy) × (k_new/k_old)
-    mercState.ty = cy + (mercState.ty - cy) * (mercState.scale / oldScale);
+    var ratio = mercState.scale / oldScale;
+    mercState.tx = cx + (mercState.tx - cx) * ratio;
+    mercState.ty = cy + (mercState.ty - cy) * ratio;
   } else if (currentProj === 'globe') {
     scales.globe = Math.max(80, Math.min(scales.globe * factor, Math.min(W,H) * 5));
   } else {
