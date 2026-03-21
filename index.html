@@ -122,7 +122,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 20:15 UTC</div>
+  <div id="version-stamp">v.2026-03-21 20:30 UTC</div>
 
   <svg id="map"></svg>
 
@@ -491,16 +491,29 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
     // Transition state before switching
     if (toProj === 'globe') {
       if (currentProj === 'mercator') {
-        // Centre the globe on the mercator's screen centre point
         var center = proj.invert([W/2, H/2]);
-        if (center) rotation = [-center[0], -center[1], 0];
+        if (center) {
+          rotation = [-center[0], -center[1], 0];
+          // Inverse of mercState.scale = scales.globe * cos(lat)
+          scales.globe = mercState.scale / Math.cos(center[1] * RAD);
+        }
       } else if (currentProj === 'north') {
         rotation[1] = -90;
-        scales.globe = scales.azed; // equal scale at the pole
+        scales.globe = scales.azed;
       } else if (currentProj === 'south') {
         rotation[1] = 90;
         scales.globe = scales.azed;
       }
+    }
+
+    if (toProj === 'north' || toProj === 'south') {
+      if (currentProj === 'mercator') {
+        var center = proj.invert([W/2, H/2]);
+        if (center) rotation[0] = -center[0];
+        // Inverse of mercState.scale = scales.azed
+        scales.azed = mercState.scale;
+      }
+      // globe → pole already handled correctly by makeProj using rotation[0]
     }
 
     if (toProj === 'mercator') {
@@ -513,13 +526,11 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
         mercState.scale = scales.globe * Math.cos(lat * RAD);
       } else {
         // North/south pole: poles can't be centred in mercator — use equator.
-        // Longitude orientation is same as globe: -rotation[0].
         lon = -rotation[0];
         lat = 0;
         mercState.scale = scales.azed;
       }
       mercState.tx = W/2 - mercState.scale * lon * RAD;
-      // Place lat at vertical centre
       mercState.ty = H/2 + mercState.scale * Math.log(Math.tan(Math.PI/4 + lat * RAD / 2));
     }
 
