@@ -72,6 +72,14 @@
     #play-btn:hover, #now-btn:hover { background: rgba(255,255,255,0.1); }
 
     .slider-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .slider-with-steps { display: flex; align-items: center; gap: 4px; }
+    .step-btns { display: flex; flex-direction: column; gap: 2px; }
+    .step-btns button {
+      background: transparent; border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 3px; color: rgba(255,255,255,0.65);
+      cursor: pointer; padding: 1px 5px; font-size: 9px; line-height: 1.4;
+    }
+    .step-btns button:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.9); }
     .slider-caption {
       font-size: 9px; color: rgba(255,255,255,0.35);
       font-family: -apple-system, sans-serif; text-transform: uppercase;
@@ -123,7 +131,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 21:31 UTC</div>
+  <div id="version-stamp">v.2026-03-21 21:39 UTC</div>
 
   <svg id="map"></svg>
 
@@ -135,9 +143,15 @@
   <div id="bottom-bar">
     <button id="now-btn">Now</button>
 
-    <div class="slider-stack">
-      <input type="range" id="date-slider" min="1" max="365">
-      <span class="slider-caption">Date</span>
+    <div class="slider-with-steps">
+      <div class="slider-stack">
+        <input type="range" id="date-slider" min="1" max="365">
+        <span class="slider-caption">Date</span>
+      </div>
+      <div class="step-btns">
+        <button id="date-up">▲</button>
+        <button id="date-down">▼</button>
+      </div>
     </div>
 
     <span id="time-label" contenteditable="true" spellcheck="false"></span>
@@ -572,6 +586,17 @@ document.querySelectorAll('#proj-bar button').forEach(function(btn) {
 // ── Sliders ───────────────────────────────────────────────────────────────────
 document.getElementById('date-slider').addEventListener('input', function() { redraw(); });
 document.getElementById('time-slider').addEventListener('input', function() { redraw(); });
+
+document.getElementById('date-up').addEventListener('click', function() {
+  var ds = document.getElementById('date-slider');
+  ds.value = Math.min(+ds.value + 1, +ds.max);
+  redraw();
+});
+document.getElementById('date-down').addEventListener('click', function() {
+  var ds = document.getElementById('date-slider');
+  ds.value = Math.max(+ds.value - 1, 1);
+  redraw();
+});
 
 // ── Play / pause ──────────────────────────────────────────────────────────────
 document.getElementById('play-btn').addEventListener('click', function() {
