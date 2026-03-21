@@ -5,85 +5,106 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Day and Night World Map</title>
   <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #2b2e3b; }
+    #wrapper { position: relative; width: 100%; height: 100vh; overflow: hidden; }
 
-    html, body {
-      width: 100%;
-      height: 100%;
-      background: #2b2e3b;
-    }
+    #map { display: block; width: 100%; height: 100%; cursor: grab; }
+    #map:active { cursor: grabbing; }
 
-    #wrapper {
-      position: relative;
-      width: 100%;
-      height: 100vh;
-    }
-
-    #chartdiv {
-      width: 100%;
-      height: 100%;
-      background: #454a58;
-    }
-
+    /* ── Projection bar ── */
     #proj-bar {
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      display: flex;
-      gap: 5px;
-      background: rgba(0, 0, 0, 0.55);
-      padding: 6px 10px;
-      border-radius: 8px;
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      z-index: 10; display: flex; gap: 5px;
+      background: rgba(0,0,0,0.55); padding: 6px 10px; border-radius: 8px;
       backdrop-filter: blur(4px);
     }
-
     #proj-bar button {
       padding: 5px 14px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      border-radius: 5px;
-      background: transparent;
-      color: rgba(255, 255, 255, 0.65);
-      font-size: 12px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.3); border-radius: 5px;
+      background: transparent; color: rgba(255,255,255,0.65);
+      font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      cursor: pointer; white-space: nowrap;
       transition: background 0.15s, color 0.15s, border-color 0.15s;
-      white-space: nowrap;
     }
-
-    #proj-bar button:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-    }
-
+    #proj-bar button:hover { background: rgba(255,255,255,0.1); color: #fff; }
     #proj-bar button.active {
-      background: rgba(255, 186, 0, 0.2);
-      border-color: #ffba00;
-      color: #ffba00;
+      background: rgba(255,186,0,0.2); border-color: #ffba00; color: #ffba00;
     }
 
+    /* ── Version stamp ── */
     #version-stamp {
-      position: absolute;
-      top: 8px;
-      left: 10px;
-      z-index: 10;
-      font-size: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: rgba(255, 255, 255, 0.35);
-      pointer-events: none;
+      position: absolute; top: 8px; left: 10px; z-index: 10;
+      font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: rgba(255,255,255,0.35); pointer-events: none;
     }
-  </style>
 
-  <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
-  <script src="https://cdn.amcharts.com/lib/5/map.js"></script>
-  <script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
-  <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
-  <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+    /* ── Follow toggle (top-right) ── */
+    #follow-bar {
+      position: absolute; top: 14px; right: 14px; z-index: 10;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 8px;
+      backdrop-filter: blur(4px);
+      font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: rgba(255,255,255,0.65);
+    }
+    .tog { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .tog input { opacity: 0; width: 0; height: 0; }
+    .tog-track {
+      position: absolute; inset: 0; background: rgba(255,255,255,0.2);
+      border-radius: 10px; cursor: pointer; transition: background 0.2s;
+    }
+    .tog input:checked + .tog-track { background: #ffba00; }
+    .tog-track::after {
+      content: ''; position: absolute; left: 3px; top: 3px;
+      width: 14px; height: 14px; background: white; border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .tog input:checked + .tog-track::after { transform: translateX(16px); }
+
+    /* ── Bottom bar ── */
+    #bottom-bar {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 10; display: flex; align-items: center; gap: 12px;
+      background: rgba(0,0,0,0.55); padding: 8px 16px; border-radius: 8px;
+      backdrop-filter: blur(4px);
+    }
+    #play-btn {
+      background: transparent; border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 4px; color: rgba(255,255,255,0.8);
+      cursor: pointer; padding: 4px 10px; font-size: 13px;
+    }
+    #play-btn:hover { background: rgba(255,255,255,0.1); }
+    #time-slider { width: 220px; accent-color: #ffba00; cursor: pointer; }
+    #time-label {
+      font-size: 12px; color: rgba(255,255,255,0.7);
+      font-family: "Courier New", monospace; min-width: 140px;
+    }
+
+    /* ── Tooltip ── */
+    #tooltip {
+      position: fixed; display: none; pointer-events: none; z-index: 100;
+      background: rgba(255,255,255,0.88); color: #222;
+      padding: 4px 9px; border-radius: 4px;
+      font-size: 12px; font-family: -apple-system, sans-serif;
+    }
+
+    /* ── SVG layers ── */
+    .sphere     { fill: #2a3a4d; }
+    .graticule  { fill: none; stroke: rgba(255,255,255,0.07); stroke-width: 0.5; }
+    .country    { fill: #47c78a; stroke: #354050; stroke-width: 0.4; cursor: pointer; }
+    .country:hover { fill: #62d99b; }
+    .night      { fill: rgba(0,0,18,0.30); pointer-events: none; }
+    .twi1       { fill: rgba(0,0,18,0.16); pointer-events: none; }
+    .twi2       { fill: rgba(0,0,18,0.08); pointer-events: none; }
+
+    /* Sun pulse */
+    @keyframes sun-pulse {
+      0%, 100% { opacity: 0.55; r: 14px; }
+      50%       { opacity: 0.80; r: 20px; }
+    }
+    .sun-glow { animation: sun-pulse 2s ease-in-out infinite; }
+  </style>
 </head>
 <body>
 
@@ -94,348 +115,342 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 17:41 UTC</div>
-  <div id="chartdiv"></div>
+  <div id="version-stamp">v.2026-03-21 17:54 UTC</div>
+
+  <svg id="map"></svg>
+
+  <div id="follow-bar">
+    <span>Move Sun</span>
+    <label class="tog">
+      <input type="checkbox" id="follow-toggle">
+      <div class="tog-track"></div>
+    </label>
+    <span>Move Map</span>
+  </div>
+
+  <div id="bottom-bar">
+    <button id="play-btn">&#9654;</button>
+    <input type="range" id="time-slider" min="0" max="1000" value="500">
+    <span id="time-label"></span>
+  </div>
+
+  <div id="tooltip"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <script>
-var root = am5.Root.new("chartdiv");
-var baseTime = new Date().getTime();
+// ── Country name lookup (ISO 3166-1 numeric → name) ───────────────────────────
+var CN = {"4":"Afghanistan","8":"Albania","12":"Algeria","24":"Angola","28":"Antigua and Barbuda","32":"Argentina","36":"Australia","40":"Austria","50":"Bangladesh","56":"Belgium","64":"Bhutan","68":"Bolivia","70":"Bosnia and Herzegovina","72":"Botswana","76":"Brazil","84":"Belize","90":"Solomon Islands","96":"Brunei","100":"Bulgaria","104":"Myanmar","108":"Burundi","116":"Cambodia","120":"Cameroon","124":"Canada","140":"Central African Republic","144":"Sri Lanka","152":"Chile","156":"China","170":"Colombia","174":"Comoros","178":"Republic of the Congo","180":"DR Congo","188":"Costa Rica","191":"Croatia","192":"Cuba","196":"Cyprus","203":"Czech Republic","204":"Benin","208":"Denmark","214":"Dominican Republic","218":"Ecuador","818":"Egypt","222":"El Salvador","232":"Eritrea","233":"Estonia","231":"Ethiopia","242":"Fiji","246":"Finland","250":"France","266":"Gabon","270":"Gambia","276":"Germany","288":"Ghana","300":"Greece","320":"Guatemala","324":"Guinea","328":"Guyana","332":"Haiti","340":"Honduras","348":"Hungary","356":"India","360":"Indonesia","364":"Iran","368":"Iraq","372":"Ireland","376":"Israel","380":"Italy","388":"Jamaica","392":"Japan","400":"Jordan","398":"Kazakhstan","404":"Kenya","408":"North Korea","410":"South Korea","414":"Kuwait","417":"Kyrgyzstan","418":"Laos","422":"Lebanon","430":"Liberia","434":"Libya","440":"Lithuania","442":"Luxembourg","450":"Madagascar","454":"Malawi","458":"Malaysia","466":"Mali","484":"Mexico","496":"Mongolia","504":"Morocco","508":"Mozambique","516":"Namibia","524":"Nepal","528":"Netherlands","554":"New Zealand","558":"Nicaragua","562":"Niger","566":"Nigeria","578":"Norway","586":"Pakistan","591":"Panama","598":"Papua New Guinea","600":"Paraguay","604":"Peru","608":"Philippines","616":"Poland","620":"Portugal","634":"Qatar","642":"Romania","643":"Russia","646":"Rwanda","682":"Saudi Arabia","686":"Senegal","694":"Sierra Leone","703":"Slovakia","705":"Slovenia","706":"Somalia","710":"South Africa","728":"South Sudan","724":"Spain","729":"Sudan","752":"Sweden","756":"Switzerland","760":"Syria","762":"Tajikistan","764":"Thailand","768":"Togo","780":"Trinidad and Tobago","788":"Tunisia","792":"Turkey","800":"Uganda","804":"Ukraine","784":"UAE","826":"United Kingdom","840":"United States","858":"Uruguay","860":"Uzbekistan","862":"Venezuela","704":"Vietnam","887":"Yemen","894":"Zambia","716":"Zimbabwe"};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+var W = window.innerWidth, H = window.innerHeight;
+var currentProj = 'mercator';
+var baseTime = Date.now();
 var centerOnSun = false;
-var offset = new Date().getTimezoneOffset() * 60 * 1000;
+var rotation = [0, 0, 0]; // [λ, φ, γ]  — used by globe/polar drag
 
-root.setThemes([
-  am5themes_Animated.new(root),
-  am5themes_Dark.new(root)
-]);
+// Mercator panning state (translate offset from default center)
+var mercTranslate = null; // set after first fitExtent
 
-var chart = root.container.children.push(am5map.MapChart.new(root, {
-  panX: "rotateX",
-  panY: "rotateY",
-  projection: am5map.geoMercator()
-}));
+var playing = false, playRaf = null, playLastTs = null;
 
-// Background polygon — fills the ocean area in globe/polar views
-var backgroundSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {}));
-backgroundSeries.mapPolygons.template.setAll({
-  fill: root.interfaceColors.get("alternativeBackground"),
-  fillOpacity: 0,
-  strokeOpacity: 0
-});
-backgroundSeries.data.push({
-  geometry: am5map.getGeoRectangle(90, 180, -90, -180)
-});
+// ── Projection factory ────────────────────────────────────────────────────────
+var GLOBE_SCALE = Math.min(W, H) * 0.45;
+// Az-ed scale: full earth disc (radius=π·scale) fits in half the viewport
+var AZED_SCALE  = Math.min(W, H) * 0.47 / Math.PI;
 
-// Countries
-var polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
-  geoJSON: am5geodata_worldLow
-}));
-
-root.systemTooltip.setAll({
-  getFillFromSprite: false,
-  getStrokeFromSprite: false,
-  autoTextColor: true
-});
-root.systemTooltip.get("background").setAll({
-  fill: am5.color(0xffffff),
-  fillOpacity: 0.8
-});
-
-polygonSeries.mapPolygons.template.setAll({
-  tooltip: root.systemTooltip,
-  fill: am5.color(0x47c78a),
-  stroke: am5.color(0x454a58),
-  tooltipText: "{name}",
-  tooltipPosition: "pointer",
-  toggleKey: "active",
-  cursorOverStyle: "pointer"
-});
-
-// Click a country to rotate the view to its centroid
-var previousPolygon;
-polygonSeries.mapPolygons.template.on("active", function (active, target) {
-  if (previousPolygon && previousPolygon !== target) {
-    previousPolygon.set("active", false);
+function makeProj(type) {
+  switch (type) {
+    case 'mercator':
+      return d3.geoMercator()
+        .scale(mercTranslate ? mercTranslate.scale : 1)
+        .translate(mercTranslate ? mercTranslate.xy   : [W/2, H/2]);
+    case 'globe':
+      return d3.geoOrthographic()
+        .scale(GLOBE_SCALE)
+        .translate([W/2, H/2])
+        .rotate(rotation)
+        .clipAngle(90);
+    case 'north':
+      return d3.geoAzimuthalEquidistant()
+        .scale(AZED_SCALE)
+        .translate([W/2, H/2])
+        .rotate([rotation[0], -90, 0])
+        .clipAngle(179.9);
+    case 'south':
+      return d3.geoAzimuthalEquidistant()
+        .scale(AZED_SCALE)
+        .translate([W/2, H/2])
+        .rotate([rotation[0], 90, 0])
+        .clipAngle(179.9);
   }
-  if (target.get("active")) {
-    var centroid = target.geoCentroid();
-    if (centroid) {
-      chart.animate({ key: "rotationX", to: -centroid.longitude, duration: 1500, easing: am5.ease.inOut(am5.ease.cubic) });
-      chart.animate({ key: "rotationY", to: -centroid.latitude, duration: 1500, easing: am5.ease.inOut(am5.ease.cubic) });
-    }
-  }
-  previousPolygon = target;
-});
+}
 
-// Sun marker — glowing pulsing circle at the sub-solar point
-var sunSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+// ── SVG layers ────────────────────────────────────────────────────────────────
+var svg = d3.select('#map').attr('width', W).attr('height', H);
 
-sunSeries.bullets.push(function () {
-  var glow = am5.Circle.new(root, {
-    radius: 18,
-    fill: am5.color(0xffba00),
-    filter: "blur(5px)"
-  });
-  glow.animate({
-    key: "radius",
-    duration: 2000,
-    to: 23,
-    loops: Infinity,
-    easing: am5.ease.yoyo(am5.ease.linear)
-  });
-  return am5.Bullet.new(root, { sprite: glow });
-});
+// Blur filter for sun glow
+svg.append('defs').append('filter').attr('id','blur6')
+   .append('feGaussianBlur').attr('stdDeviation', 6);
 
-sunSeries.bullets.push(function () {
-  return am5.Bullet.new(root, {
-    sprite: am5.Circle.new(root, { radius: 14, fill: am5.color(0xffba00) })
-  });
-});
+var layerSphere  = svg.append('path').attr('class','sphere');
+var layerGrat    = svg.append('path').attr('class','graticule');
+var layerCountry = svg.append('g');
+var layerNight   = svg.append('path').attr('class','night');
+var layerTwi1    = svg.append('path').attr('class','twi1');
+var layerTwi2    = svg.append('path').attr('class','twi2');
 
-var sunDataItem = sunSeries.pushDataItem({});
+var sunG  = svg.append('g').style('pointer-events','none');
+sunG.append('circle').attr('class','sun-glow').attr('r',16)
+    .attr('fill','#ffba00').attr('filter','url(#blur6)');
+sunG.append('circle').attr('r',7).attr('fill','#ffba00');
 
-// Night shadow — three overlapping geo circles create a graduated twilight band
-var nightSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {}));
-nightSeries.mapPolygons.template.setAll({
-  fill: am5.color(0x000000),
-  fillOpacity: 0.25,
-  strokeOpacity: 0
-});
-var nightDataItem0 = nightSeries.pushDataItem({});
-var nightDataItem1 = nightSeries.pushDataItem({});
-var nightDataItem2 = nightSeries.pushDataItem({});
+var graticule = d3.geoGraticule()();
 
-// ── Bottom controls: play, slider, editable time label ───────────────────────
-var bottomContainer = chart.children.push(am5.Container.new(root, {
-  y: am5.percent(95),
-  centerX: am5.p50,
-  x: am5.p50,
-  paddingLeft: 20,
-  paddingRight: 20,
-  width: am5.percent(90),
-  layout: root.horizontalLayout
-}));
+// ── Render ────────────────────────────────────────────────────────────────────
+var proj, pathGen;
 
-var playButton = bottomContainer.children.push(am5.Button.new(root, {
-  themeTags: ["play"],
-  centerY: am5.p50,
-  marginRight: 15,
-  icon: am5.Graphics.new(root, { themeTags: ["icon"] })
-}));
+function redraw() {
+  proj    = makeProj(currentProj);
+  pathGen = d3.geoPath(proj);
 
-playButton.events.on("click", function () {
-  if (playButton.get("active")) {
-    slider.set("start", slider.get("start") + 0.0001);
+  layerSphere.attr('d', pathGen({type:'Sphere'}));
+  layerGrat.attr('d', pathGen(graticule));
+  layerCountry.selectAll('path').attr('d', pathGen);
+
+  drawNight();
+}
+
+// ── Day / Night ───────────────────────────────────────────────────────────────
+function sliderTime() {
+  var t = +document.getElementById('time-slider').value;
+  return (t/1000 - 0.5) * 2 * 86400000 + baseTime; // ±1 day
+}
+
+function drawNight() {
+  var time = sliderTime();
+  var sun  = solarPosition(time);
+  var anti = [sun.longitude + 180, -sun.latitude];
+
+  var circle = d3.geoCircle().center(anti);
+  layerNight.datum(circle.radius(92)()).attr('d', pathGen);
+  layerTwi1 .datum(circle.radius(90)()).attr('d', pathGen);
+  layerTwi2 .datum(circle.radius(88)()).attr('d', pathGen);
+
+  // Sun marker
+  var xy = proj([sun.longitude, sun.latitude]);
+  if (xy) {
+    sunG.attr('transform','translate('+xy[0]+','+xy[1]+')')
+        .style('display', null);
   } else {
-    slider.animate({
-      key: "start",
-      to: 1,
-      duration: 15000 * (1 - slider.get("start"))
-    });
+    sunG.style('display','none');
   }
+
+  updateTimeLabel(time);
+}
+
+function updateTimeLabel(time) {
+  var d = new Date(time);
+  var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('time-label').textContent =
+    mo[d.getUTCMonth()] + ' ' + p2(d.getUTCDate()) + ' ' + d.getUTCFullYear() +
+    '  ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ' UTC';
+}
+function p2(n){ return n < 10 ? '0'+n : ''+n; }
+
+// ── Country data ──────────────────────────────────────────────────────────────
+var tooltip = d3.select('#tooltip');
+
+d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(function(world) {
+  var features = topojson.feature(world, world.objects.countries).features;
+
+  // Init mercator projection by fitting the world bounds
+  var initProj = d3.geoMercator();
+  var worldBounds = {type:'Feature', geometry:{type:'MultiPoint',
+    coordinates:[[-179.9,-60],[179.9,75]]}};
+  initProj.fitExtent([[20, 60],[W-20, H-80]], worldBounds);
+  mercTranslate = { scale: initProj.scale(), xy: initProj.translate() };
+
+  layerCountry.selectAll('path')
+    .data(features)
+    .join('path')
+      .attr('class','country')
+      .on('mousemove', function(event, d) {
+        var name = CN[String(d.id)] || '';
+        if (name) {
+          tooltip.style('display','block').text(name)
+            .style('left',(event.clientX+12)+'px')
+            .style('top', (event.clientY-22)+'px');
+        }
+      })
+      .on('mouseleave', function() { tooltip.style('display','none'); })
+      .on('click', function(event, d) {
+        if (currentProj === 'mercator') return;
+        var c = d3.geoCentroid(d);
+        // Rotate so centroid is at centre (globe) or top-of-pole (polar)
+        if (currentProj === 'globe') {
+          rotation = [-c[0], -c[1], 0];
+        } else {
+          rotation[0] = -c[0]; // polar: spin only
+        }
+        redraw();
+      });
+
+  redraw();
+  updateTimeLabel(sliderTime());
 });
 
-var slider = bottomContainer.children.push(am5.Slider.new(root, {
-  orientation: "horizontal",
-  start: 0.5,
-  centerY: am5.p50
-}));
-
-slider.on("start", function (start) {
-  if (start === 1) playButton.set("active", false);
-});
-
-slider.events.on("rangechanged", function () {
-  updateDayNight(sliderTime());
-});
-
-var timeLabel = bottomContainer.children.push(am5.EditableLabel.new(root, {
-  multiLine: false,
-  marginLeft: 20,
-  centerY: am5.p50
-}));
-timeLabel.get("background").set("strokeOpacity", 0.5);
-
-timeLabel.on("active", function () {
-  var date = chart.getDateFormatter().parse(timeLabel.get("text"), "MMM dd yyyy HH:mm");
-  if (date) {
-    baseTime = date.getTime();
-    slider.set("start", 0.5);
-    updateDayNight(baseTime);
-  }
-});
-
-// ── "Move Sun / Move Map" toggle (top-right corner) ──────────────────────────
-var followContainer = chart.children.push(am5.Container.new(root, {
-  layout: root.horizontalLayout,
-  x: am5.p100,
-  centerX: am5.p100,
-  y: 20,
-  dx: -20
-}));
-
-followContainer.children.push(am5.Label.new(root, {
-  centerY: am5.p50,
-  text: "Move Sun"
-}));
-
-var followToggle = followContainer.children.push(am5.Button.new(root, {
-  themeTags: ["switch"],
-  centerY: am5.p50,
-  icon: am5.Circle.new(root, { themeTags: ["icon"] })
-}));
-
-followContainer.children.push(am5.Label.new(root, {
-  centerY: am5.p50,
-  text: "Move Map"
-}));
-
-followToggle.on("active", function (active) {
-  centerOnSun = active;
-  updateDayNight(sliderTime());
-});
+// ── Drag ─────────────────────────────────────────────────────────────────────
+var drag0 = null;
+svg.call(d3.drag()
+  .on('start', function(event) {
+    drag0 = {
+      x: event.x, y: event.y,
+      rot: rotation.slice(),
+      tx: mercTranslate ? mercTranslate.xy[0] : W/2,
+      ty: mercTranslate ? mercTranslate.xy[1] : H/2,
+    };
+  })
+  .on('drag', function(event) {
+    if (!drag0) return;
+    var dx = event.x - drag0.x, dy = event.y - drag0.y;
+    if (currentProj === 'mercator') {
+      if (mercTranslate) mercTranslate.xy = [drag0.tx + dx, drag0.ty + dy];
+    } else if (currentProj === 'globe') {
+      var sens = 0.25;
+      rotation[0] = drag0.rot[0] + dx * sens;
+      rotation[1] = Math.max(-90, Math.min(90, drag0.rot[1] - dy * sens));
+    } else {
+      // Polar: dragging spins around the pole (only λ changes)
+      // The az-ed earth disc is more compressed than the globe, so adjust sensitivity
+      var sens = 0.25 * (GLOBE_SCALE / AZED_SCALE);
+      rotation[0] = drag0.rot[0] + dx * sens;
+    }
+    redraw();
+  })
+  .on('end', function() { drag0 = null; })
+);
 
 // ── Projection switching ──────────────────────────────────────────────────────
-function setProjection(type) {
-  document.querySelectorAll("#proj-bar button").forEach(function (btn) {
-    btn.classList.toggle("active", btn.dataset.proj === type);
+document.querySelectorAll('#proj-bar button').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    currentProj = btn.dataset.proj;
+    document.querySelectorAll('#proj-bar button').forEach(function(b) {
+      b.classList.toggle('active', b === btn);
+    });
+    // Reset Y-rotation when entering globe so it doesn't snap to previous pole tilt
+    if (currentProj === 'globe') rotation[1] = Math.max(-60, Math.min(60, rotation[1]));
+    redraw();
   });
-
-  if (type === "mercator") {
-    chart.set("projection", am5map.geoMercator());
-    backgroundSeries.mapPolygons.template.set("fillOpacity", 0);
-    chart.animate({ key: "rotationX", to: 0, duration: 600 });
-    chart.animate({ key: "rotationY", to: 0, duration: 600 });
-    setTimeout(function () { chart.goHome(); }, 650);
-
-  } else if (type === "globe") {
-    chart.set("projection", am5map.geoOrthographic());
-    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
-    chart.animate({ key: "rotationX", to: 0, duration: 600 });
-    chart.animate({ key: "rotationY", to: 0, duration: 600 });
-    setTimeout(function () { chart.goHome(); }, 650);
-
-  } else if (type === "north") {
-    // am5map.geoAzimuthalEquidistant() exists but chart.set("projection") triggers
-    // internal re-init that resets rotation after our animate() fires — defer with setTimeout.
-    chart.set("projection", am5map.geoAzimuthalEquidistant());
-    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
-    setTimeout(function () {
-      chart.set("rotationX", 0);
-      chart.set("rotationY", -90);
-    }, 50);
-
-  } else if (type === "south") {
-    chart.set("projection", am5map.geoAzimuthalEquidistant());
-    backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
-    setTimeout(function () {
-      chart.set("rotationX", 0);
-      chart.set("rotationY", 90);
-    }, 50);
-  }
-}
-
-document.querySelectorAll("#proj-bar button").forEach(function (btn) {
-  btn.addEventListener("click", function () { setProjection(btn.dataset.proj); });
 });
 
-// ── Time helpers ──────────────────────────────────────────────────────────────
-// Slider at 0.5 = baseTime (current time by default); range = ±1 day
-function sliderTime() {
-  return (slider.get("start", 0.5) - 0.5) * am5.time.getDuration("day", 2) + baseTime;
-}
+// ── Time slider ───────────────────────────────────────────────────────────────
+document.getElementById('time-slider').addEventListener('input', function() {
+  redraw();
+});
 
-function updateDayNight(time) {
-  var sun = solarPosition(time);
-  sunDataItem.set("longitude", sun.longitude);
-  sunDataItem.set("latitude", sun.latitude);
-
-  // The night center is the antipodal point of the sun
-  var anti = { longitude: sun.longitude + 180, latitude: -sun.latitude };
-  // Three circles at different radii create a soft twilight gradient
-  nightDataItem0.set("geometry", am5map.getGeoCircle(anti, 92));
-  nightDataItem1.set("geometry", am5map.getGeoCircle(anti, 90));
-  nightDataItem2.set("geometry", am5map.getGeoCircle(anti, 88));
-
-  if (centerOnSun) {
-    chart.set("rotationX", -sun.longitude);
+// ── Play / pause ──────────────────────────────────────────────────────────────
+document.getElementById('play-btn').addEventListener('click', function() {
+  playing = !playing;
+  this.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+  if (playing) {
+    playLastTs = null;
+    function step(ts) {
+      if (!playing) return;
+      if (playLastTs !== null) {
+        var slider = document.getElementById('time-slider');
+        var val = Math.min(1000, +slider.value + (ts - playLastTs) * 0.2);
+        slider.value = val;
+        redraw();
+        if (val >= 1000) {
+          playing = false;
+          document.getElementById('play-btn').innerHTML = '&#9654;';
+          return;
+        }
+      }
+      playLastTs = ts;
+      playRaf = requestAnimationFrame(step);
+    }
+    playRaf = requestAnimationFrame(step);
+  } else {
+    if (playRaf) cancelAnimationFrame(playRaf);
   }
+});
 
-  timeLabel.set("text", chart.getDateFormatter().format(new Date(time), "MMM dd yyyy HH:mm"));
+// ── Follow toggle ─────────────────────────────────────────────────────────────
+document.getElementById('follow-toggle').addEventListener('change', function() {
+  centerOnSun = this.checked;
+  if (centerOnSun) {
+    var sun = solarPosition(sliderTime());
+    rotation[0] = -sun.longitude;
+    redraw();
+  }
+});
+
+// Also apply follow-sun during slider movement
+var origDrawNight = drawNight;
+function drawNightWithFollow() {
+  if (centerOnSun) {
+    var sun = solarPosition(sliderTime());
+    rotation[0] = -sun.longitude;
+  }
+  origDrawNight();
 }
+// Patch drawNight to include the follow logic
+drawNight = drawNightWithFollow;
 
-// ── Solar position calculation (NOAA algorithm) ───────────────────────────────
-// Based on: http://bl.ocks.org/mbostock/4597134
+// ── Solar position (NOAA algorithm) ──────────────────────────────────────────
+var RAD = Math.PI / 180, DEG = 180 / Math.PI;
+
 function solarPosition(time) {
-  var centuries = (time - Date.UTC(2000, 0, 1, 12)) / 864e5 / 36525;
-  var lon = ((am5.time.round(new Date(time), "day", 1).getTime() - time - offset) / 864e5) * 360 - 180;
-  return am5map.normalizeGeoPoint({
-    longitude: lon - equationOfTime(centuries) * am5.math.DEGREES,
-    latitude: solarDeclination(centuries) * am5.math.DEGREES
-  });
+  var centuries = (time - Date.UTC(2000,0,1,12)) / 864e5 / 36525;
+  // Fraction of UTC day elapsed → sub-solar longitude
+  var dayMs = time - Math.floor(time / 86400000) * 86400000;
+  var lon = (0.5 - dayMs / 86400000) * 360;
+  var longitude = lon - equationOfTime(centuries) * DEG;
+  var latitude  = solarDeclination(centuries) * DEG;
+  // Normalize longitude to [-180, 180]
+  longitude = ((longitude + 540) % 360) - 180;
+  return { longitude: longitude, latitude: latitude };
 }
 
-// All angles in RADIANS unless noted. Equations from NOAA's Solar Calculator:
-// http://www.esrl.noaa.gov/gmd/grad/solcalc/
 function equationOfTime(c) {
   var e = eccentricityEarthOrbit(c),
       m = solarGeometricMeanAnomaly(c),
       l = solarGeometricMeanLongitude(c),
-      y = Math.tan(obliquityCorrection(c) / 2);
-  y *= y;
-  return y * Math.sin(2 * l)
-       - 2 * e * Math.sin(m)
-       + 4 * e * y * Math.sin(m) * Math.cos(2 * l)
-       - 0.5 * y * y * Math.sin(4 * l)
-       - 1.25 * e * e * Math.sin(2 * m);
+      y = Math.tan(obliquityCorrection(c) / 2); y *= y;
+  return y*Math.sin(2*l) - 2*e*Math.sin(m) + 4*e*y*Math.sin(m)*Math.cos(2*l)
+       - 0.5*y*y*Math.sin(4*l) - 1.25*e*e*Math.sin(2*m);
 }
-
 function solarDeclination(c) {
   return Math.asin(Math.sin(obliquityCorrection(c)) * Math.sin(solarApparentLongitude(c)));
 }
-
 function solarApparentLongitude(c) {
-  return solarTrueLongitude(c)
-       - (0.00569 + 0.00478 * Math.sin((125.04 - 1934.136 * c) * am5.math.RADIANS)) * am5.math.RADIANS;
+  return solarTrueLongitude(c) - (0.00569 + 0.00478*Math.sin((125.04 - 1934.136*c)*RAD))*RAD;
 }
-
-function solarTrueLongitude(c) {
-  return solarGeometricMeanLongitude(c) + solarEquationOfCenter(c);
+function solarTrueLongitude(c)         { return solarGeometricMeanLongitude(c) + solarEquationOfCenter(c); }
+function solarGeometricMeanAnomaly(c)  { return (357.52911 + c*(35999.05029 - 0.0001537*c))*RAD; }
+function solarGeometricMeanLongitude(c){
+  var l = (280.46646 + c*(36000.76983 + c*0.0003032)) % 360;
+  return ((l < 0 ? l+360 : l) / 180) * Math.PI;
 }
-
-function solarGeometricMeanAnomaly(c) {
-  return (357.52911 + c * (35999.05029 - 0.0001537 * c)) * am5.math.RADIANS;
-}
-
-function solarGeometricMeanLongitude(c) {
-  var l = (280.46646 + c * (36000.76983 + c * 0.0003032)) % 360;
-  return ((l < 0 ? l + 360 : l) / 180) * Math.PI;
-}
-
 function solarEquationOfCenter(c) {
   var m = solarGeometricMeanAnomaly(c);
-  return (Math.sin(m) * (1.914602 - c * (0.004817 + 0.000014 * c))
-        + Math.sin(m + m) * (0.019993 - 0.000101 * c)
-        + Math.sin(m + m + m) * 0.000289) * am5.math.RADIANS;
+  return (Math.sin(m)*(1.914602 - c*(0.004817 + 0.000014*c))
+        + Math.sin(2*m)*(0.019993 - 0.000101*c)
+        + Math.sin(3*m)*0.000289) * RAD;
 }
-
 function obliquityCorrection(c) {
-  return meanObliquityOfEcliptic(c)
-       + 0.00256 * Math.cos((125.04 - 1934.136 * c) * am5.math.RADIANS) * am5.math.RADIANS;
+  return meanObliquityOfEcliptic(c) + 0.00256*Math.cos((125.04 - 1934.136*c)*RAD)*RAD;
 }
-
 function meanObliquityOfEcliptic(c) {
-  return (23 + (26 + (21.448 - c * (46.815 + c * (0.00059 - c * 0.001813))) / 60) / 60) * am5.math.RADIANS;
+  return (23 + (26 + (21.448 - c*(46.815 + c*(0.00059 - c*0.001813)))/60)/60)*RAD;
 }
-
-function eccentricityEarthOrbit(c) {
-  return 0.016708634 - c * (0.000042037 + 0.0000001267 * c);
-}
+function eccentricityEarthOrbit(c)  { return 0.016708634 - c*(0.000042037 + 0.0000001267*c); }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-chart.appear(1000, 100);
-updateDayNight(baseTime);
+updateTimeLabel(Date.now());
 </script>
-
 </body>
 </html>
