@@ -109,10 +109,9 @@
     .country  { fill: #47c78a; stroke: #354050; stroke-width: 0.4; cursor: pointer; }
     .country:hover { fill: #62d99b; }
     .night      { fill: rgba(0,0,18,0.38); pointer-events: none; }
-    .terminator { fill: none; stroke: rgba(255,255,255,0.55); stroke-width: 1; pointer-events: none; }
     .lat-equator { fill: none; stroke: rgba(255,255,255,0.35); stroke-width: 0.75; pointer-events: none; }
     .lat-tropic  { fill: none; stroke: rgba(255,210,80,0.30);  stroke-width: 0.6;  pointer-events: none; stroke-dasharray: 5,4; }
-    .lat-arctic  { fill: none; stroke: rgba(140,200,255,0.30); stroke-width: 0.6;  pointer-events: none; stroke-dasharray: 2,5; }
+    .lat-arctic  { fill: none; stroke: rgba(140,200,255,0.55); stroke-width: 0.9;  pointer-events: none; stroke-dasharray: 3,4; }
   </style>
 </head>
 <body>
@@ -124,7 +123,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
-  <div id="version-stamp">v.2026-03-21 21:03 UTC</div>
+  <div id="version-stamp">v.2026-03-21 21:10 UTC</div>
 
   <svg id="map"></svg>
 
@@ -220,7 +219,7 @@ var worldContent   = svg.append('g').attr('id','world-content');
 var layerSphere    = worldContent.append('path').attr('class','sphere');
 var layerGrat      = worldContent.append('path').attr('class','grat');
 
-// Reference parallels — drawn before countries so they sit on the ocean/land surface
+// Reference parallels — use geoCircle so antimeridian is handled correctly
 var PARALLELS = [
   { lat:    0,   cls: 'lat-equator' },
   { lat:  23.45, cls: 'lat-tropic'  },
@@ -230,13 +229,17 @@ var PARALLELS = [
 ];
 var layerLatLines = worldContent.append('g').style('pointer-events','none');
 PARALLELS.forEach(function(p) {
-  var coords = d3.range(-180, 181, 1).map(function(lon) { return [lon, p.lat]; });
-  layerLatLines.append('path').datum({ type:'LineString', coordinates:coords }).attr('class', p.cls);
+  // A parallel at latitude φ is a small circle centred on the nearest pole
+  // with great-circle radius (90 − |φ|).
+  var pole   = [0, p.lat >= 0 ? 90 : -90];
+  var radius = 90 - Math.abs(p.lat);
+  layerLatLines.append('path')
+    .datum(d3.geoCircle().center(pole).radius(radius).precision(1)())
+    .attr('class', p.cls);
 });
 
 var layerCountries = worldContent.append('g');
-var layerNight      = worldContent.append('path').attr('class','night');
-var layerTerminator = worldContent.append('path').attr('class','terminator');
+var layerNight     = worldContent.append('path').attr('class','night');
 
 var sunG = worldContent.append('g').style('pointer-events','none');
 sunG.append('circle').attr('class','sun-halo').attr('r', 22)
@@ -341,11 +344,12 @@ function redraw() {
 function drawNight() {
   var time = currentTime();
   var sun  = solarPosition(time);
-  var anti = [sun.longitude + 180, -sun.latitude];
+  // Normalize anti-solar longitude to [-180, 180] to avoid geoCircle artifacts
+  var antiLon = sun.longitude + 180;
+  if (antiLon > 180) antiLon -= 360;
+  var anti = [antiLon, -sun.latitude];
 
-  var circle = d3.geoCircle().center(anti).radius(90);
-  layerNight     .datum(circle()).attr('d', pathGen);
-  layerTerminator.datum(circle()).attr('d', pathGen);
+  layerNight.datum(d3.geoCircle().center(anti).radius(90)()).attr('d', pathGen);
 
   // Sun marker — visible on globe front, dimmed warm-grey on back
   var front = isSunFront(sun.longitude, sun.latitude);
