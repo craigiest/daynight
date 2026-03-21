@@ -66,6 +66,17 @@
       border-color: #ffba00;
       color: #ffba00;
     }
+
+    #version-stamp {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      z-index: 10;
+      font-size: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: rgba(255, 255, 255, 0.35);
+      pointer-events: none;
+    }
   </style>
 
   <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
@@ -83,6 +94,7 @@
     <button data-proj="north">North Pole</button>
     <button data-proj="south">South Pole</button>
   </div>
+  <div id="version-stamp">v.2026-03-21 17:41 UTC</div>
   <div id="chartdiv"></div>
 </div>
 
@@ -304,19 +316,22 @@ function setProjection(type) {
     setTimeout(function () { chart.goHome(); }, 650);
 
   } else if (type === "north") {
-    // geoOrthographic is the only amCharts-native azimuthal projection.
-    // rotationY = -90 tilts the globe so the North Pole sits at centre.
-    chart.set("projection", am5map.geoOrthographic());
+    // am5map.geoAzimuthalEquidistant() exists but chart.set("projection") triggers
+    // internal re-init that resets rotation after our animate() fires — defer with setTimeout.
+    chart.set("projection", am5map.geoAzimuthalEquidistant());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
-    chart.animate({ key: "rotationX", to: 0, duration: 800 });
-    chart.animate({ key: "rotationY", to: -90, duration: 800 });
+    setTimeout(function () {
+      chart.set("rotationX", 0);
+      chart.set("rotationY", -90);
+    }, 50);
 
   } else if (type === "south") {
-    // rotationY = +90 tilts the globe so the South Pole sits at centre.
-    chart.set("projection", am5map.geoOrthographic());
+    chart.set("projection", am5map.geoAzimuthalEquidistant());
     backgroundSeries.mapPolygons.template.set("fillOpacity", 0.1);
-    chart.animate({ key: "rotationX", to: 0, duration: 800 });
-    chart.animate({ key: "rotationY", to: 90, duration: 800 });
+    setTimeout(function () {
+      chart.set("rotationX", 0);
+      chart.set("rotationY", 90);
+    }, 50);
   }
 }
 
@@ -422,6 +437,5 @@ chart.appear(1000, 100);
 updateDayNight(baseTime);
 </script>
 
-<!-- v.2026-03-21 17:35 UTC -->
 </body>
 </html>
