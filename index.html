@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-22 00:53 UTC</div>
+  <div id="version-stamp">v.2026-03-22 01:09 UTC</div>
 
   <svg id="map"></svg>
 
@@ -534,6 +534,7 @@ svg.call(d3.drag()
   })
   .on('start', function(event) {
     if (isPinching) return;
+    dragSuppressUntil = Infinity; // suppress wheel for the entire drag gesture
     drag0 = {
       x: event.x, y: event.y,
       rot: rotation.slice(),
