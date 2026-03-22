@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-22 01:09 UTC</div>
+  <div id="version-stamp">v.2026-03-22 01:16 UTC</div>
 
   <svg id="map"></svg>
 
@@ -261,14 +261,6 @@ function currentTime() {
 // ── SVG setup ─────────────────────────────────────────────────────────────────
 var svg = d3.select('#map').attr('width', W).attr('height', H);
 
-// Sun-glow blur filter — large region so the circular glow is never clipped to a box
-var defs = svg.append('defs');
-defs.append('filter')
-  .attr('id', 'sun-glow')
-  .attr('x', '-200%').attr('y', '-200%')
-  .attr('width', '500%').attr('height', '500%')
-  .append('feGaussianBlur').attr('stdDeviation', '8');
-
 // All geographic content lives in one group so <use> copies enable Mercator wrapping
 var worldContent   = svg.append('g').attr('id','world-content');
 var layerSphere    = worldContent.append('path').attr('class','sphere');
@@ -304,8 +296,6 @@ var wcRight = svg.append('use').attr('href','#world-content')
 // Sun marker appended AFTER wcLeft/wcRight so it always renders above wrapped copies
 // (wrapped copies can otherwise cover the sun with their night shadow near ±180°)
 var sunG = svg.append('g').style('pointer-events','none');
-sunG.append('circle').attr('class','sun-halo').attr('r', 22)
-    .attr('fill','#ffba00').attr('filter','url(#sun-glow)').attr('opacity', 0.55);
 // Asterisk: 3 lines at 0°/60°/120°, giving 6 arms
 [0, 60, 120].forEach(function(deg) {
   var a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
@@ -415,7 +405,6 @@ function drawNight() {
     sunG.attr('transform','translate('+xy[0]+','+xy[1]+')')
         .style('display', null);
     var col = front ? '#ffba00' : '#c8a882';
-    sunG.select('.sun-halo').attr('fill', col).attr('opacity', front ? 0.55 : 0.10);
     sunG.selectAll('.sun-mark').attr('stroke', col).attr('opacity', front ? 1 : 0.10);
   } else {
     sunG.style('display', 'none');
