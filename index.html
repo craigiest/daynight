@@ -173,7 +173,7 @@
     <button data-proj="north" data-short="North Pole">Azimuthal Equidistant (North Pole)</button>
     <button data-proj="south" data-short="South Pole">Azimuthal Equidistant (South Pole)</button>
   </div>
-  <div id="version-stamp">v.2026-03-22 00:38 UTC</div>
+  <div id="version-stamp">v.2026-03-22 00:53 UTC</div>
 
   <svg id="map"></svg>
 
@@ -526,6 +526,7 @@ d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(f
 // ── Drag (pan / rotate) ───────────────────────────────────────────────────────
 var drag0 = null;
 var isPinching = false;
+var dragSuppressUntil = 0; // suppress wheel-zoom briefly after a drag ends
 svg.call(d3.drag()
   .filter(function(event) {
     // Reject drag while pinching; also reject any non-primary mouse buttons
@@ -572,12 +573,13 @@ svg.call(d3.drag()
     }
     redraw();
   })
-  .on('end', function() { drag0 = null; })
+  .on('end', function() { drag0 = null; dragSuppressUntil = performance.now() + 300; })
 );
 
 // ── Scroll to zoom ────────────────────────────────────────────────────────────
 document.getElementById('map').addEventListener('wheel', function(event) {
   event.preventDefault();
+  if (performance.now() < dragSuppressUntil) return; // ignore spurious scroll at drag-end
   var factor = event.deltaY < 0 ? 1.15 : 1/1.15;
 
   if (currentProj === 'mercator') {
